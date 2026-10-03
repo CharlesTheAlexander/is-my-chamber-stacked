@@ -1,0 +1,1051 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Is My Chamber Stacked?</title>
+<meta name="description" content="Paste a Congressional Debate chamber from Tabroom and see how strong the room is and how likely you are to break.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@800&family=Public+Sans:ital,wght@0,400..800;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --page: #ECEEF1;
+  --ink: #1B2A4A;
+  --ink-2: #4E5A75;
+  --ink-3: #7D879C;
+  --rule: #C5CBD6;
+  --sheet: #F8F9FB;
+  --chip: #FFFFFF;
+  --btn: #1B2A4A;
+  --btn-hover: #2B3E66;
+  --btn-ink: #F4F6F9;
+  --focus: #1F62D6;
+  --board: #0E1A33;
+  --board-row: #13224A;
+  --board-ink: #E6EAF2;
+  --board-ink-2: #9AA5BD;
+  --brass: #B39256;
+  --brass-hair: rgba(179, 146, 86, .24);
+  --led: #F2F5FB;
+  --led-ghost: #182648;
+  --track: #1D2B4D;
+  --red: #E5484D;
+  --red-dim: #A8363B;
+  --amber: #F0B429;
+  --amber-dim: #A97E1E;
+  --green: #2FB565;
+  --green-dim: #1E7A45;
+  --unlit: #3A4660;
+  --d1: #F1DFCB; --d2: #E5C187; --d3: #C8913F; --d4: #93582A; --d5: #5B3418; --d6: #262120;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #121A2A; --ink: #ECEEF1; --ink-2: #A9B3C7; --ink-3: #6F7A92; --rule: #2A3550;
+    --sheet: #18213A; --chip: #1A2440; --btn: #ECEEF1; --btn-hover: #FFFFFF; --btn-ink: #1B2A4A; --focus: #8FB4FF;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #121A2A; --ink: #ECEEF1; --ink-2: #A9B3C7; --ink-3: #6F7A92; --rule: #2A3550;
+  --sheet: #18213A; --chip: #1A2440; --btn: #ECEEF1; --btn-hover: #FFFFFF; --btn-ink: #1B2A4A; --focus: #8FB4FF;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 400 1rem/1.55 "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.board :focus-visible, .readout :focus-visible { outline-color: #8FB4FF; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+[hidden] { display: none !important; }
+p { margin: 0; }
+.wrap { max-width: 68rem; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 48rem) { .wrap { padding: 0 2rem; } }
+
+/* Data-coverage line */
+.status { padding: .625rem 0; border-bottom: 1px solid var(--rule); font-size: .875rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.linkbtn { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: .2em; text-decoration-thickness: 1px; cursor: pointer; }
+.linkbtn:hover { text-decoration-thickness: 2px; }
+
+/* Hero and bill draft */
+h1 { font-size: clamp(2.75rem, 8.5vw, 5.25rem); font-weight: 800; letter-spacing: -.04em; line-height: .95; margin: 3.5rem 0 1.25rem; max-width: 11ch; }
+.lede { font-size: 1.1875rem; line-height: 1.5; color: var(--ink-2); max-width: 46ch; }
+.bill { margin-top: 2.75rem; max-width: 50rem; }
+.bill-title { font-weight: 700; font-size: 1.0625rem; margin-bottom: .625rem; }
+.draft { display: flex; background: var(--sheet); border: 1px solid var(--rule); border-radius: 3px; }
+.draft:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+.gutter { margin: 0; padding: .75rem .625rem .75rem .5rem; min-width: 2.75rem; text-align: right; border-right: 1px solid var(--rule); color: var(--ink-3); font: 500 .8125rem/1.75rem "Public Sans", system-ui, sans-serif; font-variant-numeric: tabular-nums; overflow: hidden; user-select: none; }
+.draft textarea { flex: 1; min-width: 0; height: calc(10 * 1.75rem + 1.5rem + 12px); padding: .75rem; border: 0; background: transparent; color: inherit; font: 400 1rem/1.75rem "Public Sans", system-ui, sans-serif; resize: vertical; white-space: pre; overflow: auto; }
+.draft textarea:focus { outline: none; }
+.draft textarea::placeholder { color: var(--ink-3); }
+.hint { font-size: .875rem; color: var(--ink-2); margin-top: .625rem; max-width: 62ch; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; margin-top: 1.25rem; }
+.btn { font: 700 1rem/1.2 "Public Sans", system-ui, sans-serif; padding: .8125rem 1.375rem; border: 0; border-radius: 4px; background: var(--btn); color: var(--btn-ink); cursor: pointer; }
+.btn:hover { background: var(--btn-hover); }
+.btn[disabled] { opacity: .55; cursor: progress; }
+.err { color: var(--red-dim); font-weight: 600; }
+:root[data-theme="dark"] .err { color: #FF8F92; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .err { color: #FF8F92; } }
+
+/* Sections */
+.step { margin-top: 4.5rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); }
+h2 { font-size: clamp(1.625rem, 4vw, 2.125rem); font-weight: 800; letter-spacing: -.025em; line-height: 1.1; margin: 0 0 .5rem; }
+h2:focus { outline: none; }
+.sub { color: var(--ink-2); max-width: 62ch; }
+
+/* Confirm step */
+.seg { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.25rem; }
+.seg-label { width: 100%; font-weight: 600; font-size: .9375rem; }
+.seg button { font: 600 .9375rem/1.2 "Public Sans", system-ui, sans-serif; padding: .5rem .875rem; border: 1px solid var(--rule); border-radius: 2px; background: var(--chip); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--page); border-color: var(--ink); }
+.chips { list-style: none; padding: 0; margin: 1.25rem 0 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+.chip { display: inline-flex; align-items: center; gap: .375rem; max-width: 100%; padding: .1875rem .1875rem .1875rem .5rem; background: var(--chip); border: 1px solid var(--rule); border-radius: 3px; }
+.chip.is-me { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.chip input[type="radio"] { margin: 0; width: 1rem; height: 1rem; accent-color: var(--ink); cursor: pointer; }
+.chip-name { font: 600 .9375rem/1.3 "Public Sans", system-ui, sans-serif; color: inherit; background: none; border: 0; padding: .25rem .125rem; cursor: text; text-align: left; overflow-wrap: anywhere; }
+.chip-name:hover { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: .2em; }
+.chip-edit { font: 600 .9375rem/1.3 "Public Sans", system-ui, sans-serif; width: 13rem; max-width: 60vw; padding: .1875rem .375rem; border: 1px solid var(--ink); border-radius: 2px; background: var(--sheet); color: var(--ink); }
+.chip-school { font-size: .8125rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.chip-x { flex: none; width: 1.75rem; height: 1.75rem; border: 0; border-radius: 2px; background: none; color: var(--ink-2); font: 400 1.25rem/1 "Public Sans", system-ui, sans-serif; cursor: pointer; }
+.chip-x:hover { background: var(--page); color: var(--ink); }
+.tag { display: inline-block; font-size: .6875rem; font-weight: 700; line-height: 1.3; padding: .0625rem .3125rem; border: 1px solid currentColor; border-radius: 2px; white-space: nowrap; vertical-align: .1em; }
+.tag-me { background: var(--ink); color: var(--page); border-color: var(--ink); }
+.add { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; align-items: center; }
+.add input, .adv input { font: 400 1rem/1.3 "Public Sans", system-ui, sans-serif; padding: .5rem .625rem; border: 1px solid var(--rule); border-radius: 2px; background: var(--chip); color: var(--ink); }
+.add input { width: 16rem; max-width: 100%; }
+.add button { font: 600 .9375rem/1.2 "Public Sans", system-ui, sans-serif; padding: .5625rem .875rem; border: 1px solid var(--ink); border-radius: 2px; background: none; color: var(--ink); cursor: pointer; }
+.ignored { margin-top: 1rem; font-size: .875rem; color: var(--ink-2); }
+.ignored summary { cursor: pointer; }
+.ignored ul { margin: .5rem 0 0; padding-left: 1.25rem; }
+.ignored li { font-variant-numeric: tabular-nums; }
+.adv { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin-top: 1.5rem; font-weight: 600; }
+.adv input { width: 5rem; font-variant-numeric: tabular-nums; }
+.adv small { font-weight: 400; color: var(--ink-2); font-size: .875rem; }
+
+/* Report */
+.rsec { margin-top: 3.5rem; }
+.rsec:first-of-type { margin-top: 2rem; }
+
+/* The vote board */
+.board { margin-top: 1rem; background: var(--board); color: var(--board-ink); border: 1px solid var(--brass); border-radius: 4px; overflow: hidden; }
+.board-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 1.5rem 2.5rem; align-items: start; padding: 1.75rem 1.75rem 0; }
+.led { display: inline-grid; font-family: "Doto", ui-monospace, monospace; font-weight: 800; line-height: .82; color: var(--led); font-variant-numeric: tabular-nums; }
+.led::before, .led > span { grid-area: 1 / 1; text-align: right; }
+.led::before { content: attr(data-ghost); color: var(--led-ghost); }
+.led-xl { font-size: clamp(5rem, 13vw, 8rem); }
+.led-cap { margin-top: .75rem; font-size: .8125rem; color: var(--board-ink-2); }
+.verdict-line { font-size: 1.125rem; color: var(--board-ink-2); padding-top: .5rem; }
+.verdict-label { display: flex; align-items: center; gap: .625rem; font-size: clamp(2rem, 5vw, 2.75rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.05; margin-top: .25rem; }
+.verdict-label .light { width: 1rem; height: 1rem; }
+.blurb { margin-top: .5rem; font-size: 1.0625rem; max-width: 40ch; }
+.tally { margin: 0; display: grid; grid-template-columns: auto auto; gap: .375rem 1.25rem; align-items: baseline; padding: .875rem 1.125rem; border: 1px solid var(--brass-hair); border-radius: 2px; }
+.tally div { display: contents; }
+.tally dt { display: flex; align-items: center; gap: .5rem; font-size: .875rem; color: var(--board-ink-2); white-space: nowrap; }
+.tally dd { margin: 0; font-family: "Doto", ui-monospace, monospace; font-weight: 800; font-size: 1.75rem; line-height: 1; text-align: right; color: var(--led); }
+.mix { padding: 1.75rem 1.75rem 1.25rem; }
+.tierbar { display: flex; gap: 2px; height: .875rem; }
+.tierbar i { display: block; min-width: 4px; }
+.legend { list-style: none; display: flex; flex-wrap: wrap; gap: .375rem 1.25rem; margin: .75rem 0 0; padding: 0; font-size: .875rem; color: var(--board-ink-2); }
+.legend li { display: flex; align-items: center; gap: .4375rem; }
+.legend i { width: .625rem; height: .625rem; flex: none; }
+.legend b { color: var(--board-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.found { margin-top: 1rem; font-weight: 600; }
+.found span { font-weight: 400; color: var(--board-ink-2); }
+.roster { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--brass); }
+.row, .roster-head { display: grid; grid-template-columns: .75rem minmax(0, 1fr) 7.5rem 8.5rem 10.5rem; gap: .25rem 1rem; align-items: center; padding: .5625rem 1.75rem; }
+.roster-head { font-size: .75rem; color: var(--board-ink-2); padding-top: .625rem; padding-bottom: .375rem; }
+.row { border-top: 1px solid var(--brass-hair); }
+.row.is-me { background: var(--board-row); }
+.vote { font-size: .875rem; color: var(--board-ink-2); white-space: nowrap; }
+.who { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .75rem; }
+.nm { font-weight: 650; overflow-wrap: anywhere; }
+.sch { font-size: .8125rem; color: var(--board-ink-2); overflow-wrap: anywhere; }
+.tier { font-size: .875rem; }
+.rate { display: flex; align-items: center; gap: .625rem; }
+.bar { flex: 1; height: .375rem; background: var(--track); }
+.bar i { display: block; height: 100%; background: var(--board-ink); }
+.rate .num { width: 1.75rem; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.board-note { padding: .875rem 1.75rem; border-top: 1px solid var(--brass-hair); font-size: .875rem; color: var(--board-ink-2); }
+
+.light { display: inline-block; flex: none; width: .75rem; height: .75rem; border-radius: 50%; background: var(--c, var(--unlit)); }
+.light[data-l="red"] { --c: var(--red); }
+.light[data-l="amber"] { --c: var(--amber); }
+.light[data-l="green"] { --c: var(--green); }
+.light[data-l="unlit"] { --c: var(--unlit); }
+.light[data-l="me"] { background: transparent; box-shadow: inset 0 0 0 2px currentColor; }
+.board .light:not([data-l="me"]):not([data-l="unlit"]) { box-shadow: 0 0 .5rem color-mix(in srgb, var(--c) 55%, transparent); }
+.roster .light:not([data-l="me"]) { animation: switch-on 140ms linear both; animation-delay: calc(var(--i) * 40ms); }
+@keyframes switch-on {
+  0%, 50% { background: var(--unlit); box-shadow: none; }
+  100% { background: var(--c); }
+}
+@media (prefers-reduced-motion: reduce) { .roster .light:not([data-l="me"]) { animation: none; } }
+
+@media (max-width: 47.99rem) {
+  .board-top { grid-template-columns: auto minmax(0, 1fr); padding: 1.25rem 1.25rem 0; gap: 1.25rem 1.5rem; }
+  .tally { grid-column: 1 / -1; grid-template-columns: repeat(4, auto); justify-content: start; gap: .25rem 1rem; }
+  .tally div { display: flex; flex-direction: column-reverse; gap: .375rem; }
+  .tally dd { text-align: left; }
+  .mix { padding: 1.5rem 1.25rem 1rem; }
+  .roster-head { display: none; }
+  .row { grid-template-columns: .75rem minmax(0, 1fr) auto; grid-template-areas: "l who rate" ". meta meta"; padding: .625rem 1.25rem; gap: .125rem .75rem; }
+  .row > .light { grid-area: l; align-self: start; margin-top: .4rem; }
+  .row .who { grid-area: who; }
+  .row .rate { grid-area: rate; align-self: start; width: 5.25rem; gap: .5rem; padding-top: .125rem; }
+  .row .meta { grid-area: meta; display: flex; flex-wrap: wrap; gap: 0 1rem; }
+  .board-note { padding: .875rem 1.25rem; }
+}
+@media (min-width: 48rem) { .row .meta { display: contents; } }
+@media (max-width: 30rem) {
+  .board-top { grid-template-columns: 1fr; }
+  .tally { grid-template-columns: repeat(2, auto); gap: .75rem 1.5rem; }
+  .verdict-line { padding-top: 0; }
+}
+
+/* How fried */
+.fried-top { display: flex; flex-wrap: wrap; gap: 1.25rem 2rem; align-items: center; margin-top: 1rem; }
+.readout { background: var(--board); color: var(--board-ink); border: 1px solid var(--brass); border-radius: 4px; padding: 1.125rem 1.5rem 1rem; }
+.led-lg { font-size: 5.5rem; }
+.fried-label { font-size: clamp(1.75rem, 4.5vw, 2.5rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
+.fried-blurb { margin-top: .375rem; font-size: 1.0625rem; color: var(--ink-2); max-width: 40ch; }
+.doneness { list-style: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; padding: 0; margin: 2rem 0 0; max-width: 50rem; }
+.doneness li { font-size: .8125rem; line-height: 1.25; color: var(--ink-2); }
+.doneness li::before { content: ""; display: block; height: 1.25rem; margin-bottom: .5rem; background: var(--d); border-radius: 1px; box-shadow: inset 0 0 0 1px rgba(128, 128, 128, .28); }
+.doneness li[aria-current] { color: var(--ink); font-weight: 750; }
+.doneness li[aria-current]::before { outline: 3px solid var(--ink); outline-offset: 2px; }
+.here { display: block; font-weight: 400; font-size: .75rem; color: var(--ink-2); }
+.figs { display: flex; flex-wrap: wrap; gap: 1.25rem 3.5rem; margin: 2rem 0 0; }
+.figs dt { font-size: .875rem; color: var(--ink-2); }
+.figs dd { margin: .125rem 0 0; font-size: 2.5rem; font-weight: 800; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.figs dd small { font-size: 1rem; font-weight: 600; letter-spacing: 0; color: var(--ink-2); }
+.my-rating { margin-top: 1.5rem; max-width: 62ch; }
+.my-rating strong { font-variant-numeric: tabular-nums; }
+.levels { border: 0; padding: 0; margin: 1rem 0 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+.levels legend { padding: 0; margin-bottom: .5rem; font-weight: 600; font-size: .9375rem; }
+.levels label { position: relative; }
+.levels input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.levels span { display: block; padding: .4375rem .875rem; border: 1px solid var(--rule); border-radius: 2px; background: var(--chip); font-weight: 600; font-size: .9375rem; }
+.levels small { font-weight: 400; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.levels input:checked + span { background: var(--ink); color: var(--page); border-color: var(--ink); }
+.levels input:checked + span small { color: inherit; }
+.levels input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 2px; }
+.prompt { margin-top: 1rem; padding: 1rem 1.125rem; border: 1px dashed var(--ink-3); border-radius: 2px; max-width: 62ch; }
+
+/* Individual highlights: ledger */
+.ledger { margin-top: 1.25rem; border-top: 2px solid var(--ink); }
+.entry { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: .75rem 2.5rem; padding: 1.5rem 0; border-bottom: 1px solid var(--rule); }
+.entry h3 { font-size: 1.3125rem; font-weight: 750; letter-spacing: -.015em; line-height: 1.2; margin: 0; overflow-wrap: anywhere; }
+.entry-side .school { font-size: .875rem; color: var(--ink-2); margin-top: .125rem; overflow-wrap: anywhere; }
+.entry-vote { display: flex; align-items: center; gap: .5rem; margin-top: .75rem; font-size: .875rem; font-weight: 600; }
+.score { margin-top: .5rem; font-size: 2.75rem; font-weight: 800; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.score small { font-size: .875rem; font-weight: 500; letter-spacing: 0; color: var(--ink-2); }
+.entry-main > * + * { margin-top: .875rem; }
+.entry-tier { font-size: 1.0625rem; max-width: 62ch; }
+.note { font-size: .875rem; color: var(--ink-2); max-width: 62ch; }
+.results { list-style: none; margin-bottom: 0; padding: 0; border-left: 2px solid var(--rule); }
+.results li { display: flex; flex-wrap: wrap; align-items: baseline; gap: .125rem .625rem; padding: .1875rem 0 .1875rem .875rem; }
+.results .res { font-weight: 600; }
+.results .lvl { font-size: .8125rem; color: var(--ink-2); }
+.badges { list-style: none; display: flex; flex-wrap: wrap; gap: .375rem; padding: 0; margin-bottom: 0; }
+.badges li { font-size: .8125rem; font-weight: 650; padding: .125rem .5rem; border: 1px solid var(--ink); border-radius: 2px; }
+.stats { display: flex; flex-wrap: wrap; gap: .5rem 1.75rem; margin-bottom: 0; }
+.stats dt { font-size: .75rem; color: var(--ink-2); }
+.stats dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dots { display: inline-flex; gap: 3px; vertical-align: middle; }
+.dots i { width: .5rem; height: .5rem; border: 1px solid var(--ink); }
+.dots i.on { background: var(--ink); }
+.schools { font-size: .8125rem; color: var(--ink-2); max-width: 70ch; overflow-wrap: anywhere; }
+.fix { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; align-items: center; font-size: .875rem; }
+.fix select { font: 400 .875rem/1.3 "Public Sans", system-ui, sans-serif; padding: .375rem .5rem; border: 1px solid var(--ink-3); border-radius: 2px; background: var(--chip); color: var(--ink); max-width: 100%; }
+.fix label { display: flex; flex-wrap: wrap; gap: .375rem .625rem; align-items: center; font-weight: 600; max-width: 100%; }
+.myst { list-style: none; padding: 0; margin-bottom: 0; }
+.myst li { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem 1rem; padding: .5rem 0; border-top: 1px solid var(--rule); }
+.myst li:first-child { border-top: 0; padding-top: 0; }
+.myst .nm { min-width: 11rem; }
+.dym { display: flex; flex-wrap: wrap; align-items: baseline; gap: .375rem .5rem; font-size: .875rem; color: var(--ink-2); }
+.sugg { font: 600 .875rem/1.2 "Public Sans", system-ui, sans-serif; padding: .3125rem .625rem; border: 1px solid var(--ink); border-radius: 2px; background: var(--chip); color: var(--ink); cursor: pointer; }
+.sugg:hover { background: var(--ink); color: var(--page); }
+@media (max-width: 44rem) {
+  .entry { grid-template-columns: minmax(0, 1fr); }
+  .entry-side { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1rem; }
+  .entry-side .score { grid-column: 2; grid-row: 1 / span 3; margin-top: 0; text-align: right; }
+  .entry-side .score small { display: block; }
+}
+
+footer { margin: 5rem 0 3rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); font-size: .875rem; color: var(--ink-2); }
+footer p { max-width: 70ch; }
+footer p + p { margin-top: .375rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="status" id="status">Loading Tabroom data…</p>
+
+  <main>
+    <h1>Is my chamber stacked?</h1>
+    <p class="lede">Paste your Congress chamber and we'll check everyone's Tabroom record, then tell you how strong the room is and how fried you are.</p>
+
+    <form class="bill" id="paste-form">
+      <p class="bill-title" id="bill-title">A bill to find out whether my chamber is stacked</p>
+      <div class="draft">
+        <pre class="gutter" id="gutter" aria-hidden="true"></pre>
+        <textarea id="paste" wrap="off" spellcheck="false" autocomplete="off" aria-label="Chamber list" aria-describedby="paste-hint paste-err" placeholder="Paste your chamber from Tabroom (or type names, one per line)"></textarea>
+      </div>
+      <p class="hint" id="paste-hint">Copy the entries from the Tabroom schematic, or type one name per line. Judges and room numbers get skipped.</p>
+      <div class="actions">
+        <button class="btn" id="roll">Call the roll</button>
+        <p class="err" id="paste-err" role="alert"></p>
+      </div>
+    </form>
+
+    <section class="step" id="confirm" hidden aria-labelledby="confirm-h">
+      <h2 id="confirm-h" tabindex="-1">Who's in the chamber</h2>
+      <p class="sub">Click a name to fix it. Use the circle to mark yourself, so we can tell you how fried you are.</p>
+      <div class="seg" id="chamber-pick" role="group" aria-labelledby="chamber-pick-l" hidden></div>
+      <ul class="chips" id="chips"></ul>
+      <form class="add" id="add-form">
+        <label class="sr" for="add-name">Add a name</label>
+        <input id="add-name" placeholder="Add a name" autocomplete="off">
+        <button type="submit">Add</button>
+      </form>
+      <details class="ignored" id="ignored" hidden><summary></summary><ul></ul></details>
+      <label class="adv">Spots that break <input type="number" id="adv" min="1" step="1" inputmode="numeric"> <small id="adv-note"></small></label>
+      <div class="actions">
+        <button type="button" class="btn" id="run">Run the numbers</button>
+        <p class="err" id="run-err" role="alert"></p>
+      </div>
+    </section>
+
+    <div id="report" hidden>
+      <section class="rsec" aria-labelledby="rate-h">
+        <h2 id="rate-h" tabindex="-1">Chamber rating</h2>
+        <div class="board" id="board"></div>
+      </section>
+      <section class="rsec" aria-labelledby="fried-h">
+        <h2 id="fried-h">How fried you are</h2>
+        <div id="fried"></div>
+      </section>
+      <section class="rsec" aria-labelledby="hl-h">
+        <h2 id="hl-h">Individual highlights</h2>
+        <p class="sub">Everyone we found on Tabroom, most dangerous first.</p>
+        <div class="ledger" id="ledger"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <p>Built from public Tabroom results. Not affiliated with Tabroom or the NSDA.</p>
+    <p id="coverage">Covers varsity Congress results from every Tabroom circuit, 2020-21 to 2026-27. Anyone without a varsity Congress result on Tabroom shows up as a Mystery Box.</p>
+  </footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+
+const CHAMBER_BLURB = {
+  "Open Season": "Bring a snack. This one's yours to lose.",
+  "Manageable": "A few real names. Mostly vibes.",
+  "Spicy": "Some people in here have actually read the docket.",
+  "Stacked": "A semis chamber wearing a prelim costume.",
+  "Group of Death": "Who scheduled this. Seriously.",
+};
+const TIER_BLURB = {
+  "Final Boss": "Trophy shelf needs a second shelf.",
+  "TOC-Bound": "Already looking at Lexington hotels.",
+  "Bid Hunter": "One bid down, hungry for two.",
+  "Circuit Regular": "Knows the circuit. Knows the drills.",
+  "Local Menace": "Undefeated in their zip code.",
+  "Free Real Estate": "Tabroom has receipts, and they're not scary.",
+  "Mystery Box": "No Tabroom trail. Freshman or sleeper agent.",
+};
+const TIER_COLOR = {
+  "Final Boss": "--red", "TOC-Bound": "--red-dim", "Bid Hunter": "--amber", "Circuit Regular": "--amber-dim",
+  "Local Menace": "--green-dim", "Free Real Estate": "--green", "Mystery Box": "--unlit",
+};
+const FRIED = [
+  ["Raw", "You're the problem in this room."],
+  ["Lightly Toasted", "Speak early, speak often."],
+  ["Golden Brown", "Very breakable. Bring your best authorship."],
+  ["Crispy", "You'll need a PO-level session."],
+  ["Deep Fried", "Pray for a friendly parli."],
+  ["Charcoal", "Character-building chamber."],
+];
+const LEVELS = [["Novice", 5], ["Local", 18], ["Circuit", 35], ["Bid", 50], ["TOC", 70]];
+const LIGHT = { "Problem": "red", "Coin flip": "amber", "You've got this": "green" };
+const SOURCE = {
+  history: "from your Tabroom history",
+  override: "from the level you picked",
+  assumed: "assumed, because we couldn't find you on Tabroom",
+};
+
+const S = { text: "", chambers: [], ignored: [], ci: 0, entries: [], me: null, advTouched: false, meRating: null, editing: null, report: null };
+
+/* Static data written by `python3 app.py --export site` */
+const loaded = new Map();
+function load(path) {
+  if (!loaded.has(path)) {
+    loaded.set(path, fetch(path)
+      .then(r => { if (!r.ok) throw new Error(`Couldn't load the Tabroom data (${r.status}). Try again.`); return r.json(); },
+            () => { throw new Error("Couldn't load the Tabroom data. Check your connection and try again."); })
+      .catch(e => { loaded.delete(path); throw e; }));
+  }
+  return loaded.get(path);
+}
+let known = null;
+async function loadNames() {
+  const names = await load("data/names.json");
+  known ||= new Set(names.map(r => r[0]));
+  return names;
+}
+
+function nameKey(s) {
+  return s.normalize("NFKD").replace(/\p{Mn}/gu, "").toLowerCase()
+    .replace(/[-\u2010–—_.]/g, " ").replace(/['\u2019]/g, "").trim().split(/\s+/).join(" ");
+}
+function shardOf(key) {
+  let h = 2166136261;
+  for (const b of new TextEncoder().encode(key)) h = Math.imul(h ^ b, 16777619) >>> 0;
+  return (h & 255).toString(16).padStart(2, "0");
+}
+const own = (o, k) => o && Object.hasOwn(o, k) ? o[k] : undefined;
+const shard = key => load(`data/p/${shardOf(key)}.json`);
+const people = async key => own((await shard(key)).n, key) || [];
+
+/* Paste parsing (port of app.py parse_paste) */
+const PARTICLES = new Set(["de", "del", "della", "di", "da", "dos", "das", "du", "van", "von", "der", "den", "la", "le", "bin", "ibn", "al", "el", "y"]);
+const NOISE = /^(ch\.?|chamber|location|judges?|entries|session\b.*|start time.*|rooms with.*|judges with gavels.*|.*\bround \d+$|chamber \d+|room\b.*)$/i;
+const ROOM = /^[A-Z]{1,5}[ -]?\d{1,4}[A-Z]?$/;
+const SCHOOL_CODE = /^[A-Z]{2,4}$/;
+const PO = /\s*(?:[-–—]\s*)?(?:\(\s*PO\s*\)|\bP\.?O\.?\b|presiding officer)\s*/gi;
+const words = s => s.split(/\s+/).filter(Boolean);
+
+function splitRun(tokens, dict) {
+  const n = tokens.length;
+  const solve = sortedRun => {
+    const memo = new Map();
+    const best = (i, prev) => {
+      if (i === n) return [0, []];
+      const mk = `${i}|${prev}`;
+      if (memo.has(mk)) return memo.get(mk);
+      let out = null;
+      for (const [k, base] of [[2, 0], [3, 3], [1, 8], [4, 9]]) {
+        if (i + k > n) continue;
+        const name = tokens.slice(i, i + k).join(" "), key = nameKey(name);
+        let cost = base - (dict.has(key) ? 10 : 0);
+        if (k >= 2 && PARTICLES.has(tokens[i + k - 1].toLowerCase())) cost += 6;
+        if (k === 3 && PARTICLES.has(tokens[i + 1].toLowerCase())) cost -= 2;
+        if (sortedRun && key < prev) cost += 7;
+        const sub = best(i + k, key);
+        if (!out || cost + sub[0] < out[0]) out = [cost + sub[0], [name, ...sub[1]]];
+      }
+      memo.set(mk, out);
+      return out;
+    };
+    return best(0, "")[1];
+  };
+  if (!n) return [];
+  const names = solve(true), keys = names.map(nameKey);
+  return keys.slice(1).filter((b, j) => keys[j] <= b).length >= 0.85 * (keys.length - 1) ? names : solve(false);
+}
+
+function parseItem(raw) {
+  let s = raw.replace(/^\s*(?:\d{1,3}[.)]|[-*•·])\s+/, "").trim(), school = null, code = null, m;
+  const po = s.search(PO) >= 0;
+  s = s.replace(PO, " ").replace(/^[ -]+|[ -]+$/g, "");
+  if ((m = s.match(/^(.*?)\s*\((.+)\)\s*$/)) || (m = s.match(/^(.*?)\s+[-–—|]\s+(.+)$/))) [, s, school] = m;
+  else if ((m = s.match(/^([^,\s]+),\s*([^,\s]+)$/))) s = `${m[2]} ${m[1]}`;
+  let toks = words(s);
+  if (toks.length >= 3 && SCHOOL_CODE.test(toks[0])) [code, ...toks] = toks;
+  if (!toks.length || toks.length > 5 || !/\p{L}/u.test(s)) return null;
+  return { name: toks.join(" "), school, school_code: code, po };
+}
+
+function parsePaste(text, dict) {
+  text = text.normalize("NFKC").replace(/\u00a0/g, " ").replace(/\u200b/g, "");
+  const lines = text.split(/\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/).map(l => l.trimEnd());
+  const isRun = c => words(c).length >= 5 && !/[,()|–—]|\s-\s/.test(c);
+  const schematic = lines.some(ln => ln.split("\t").some(c => isRun(c.trim())));
+  const chambers = [], ignored = [];
+  let cur = [];
+  for (const ln of lines) {
+    let cells = ln.split("\t").map(c => c.trim());
+    if (/^\d{1,3}$/.test(cells[0]) && (cells.length > 1 || schematic)) {
+      if (cur.length) chambers.push(cur);
+      cur = [];
+      cells = cells.slice(1);
+    }
+    if (!schematic && cells.length === 2 && cells[1] && !ROOM.test(cells[1])) cells = [`${cells[0]} (${cells[1]})`];
+    for (const c of cells) {
+      if (!c || NOISE.test(c) || ROOM.test(c)) continue;
+      if (schematic && isRun(c)) {
+        const toks = words(c);
+        const parts = toks.filter(t => SCHOOL_CODE.test(t)).length >= 2 && SCHOOL_CODE.test(toks[0])
+          ? c.split(/\s(?=[A-Z]{2,4}\s)/) : splitRun(toks, dict);
+        cur.push(...parts.map(parseItem).filter(Boolean));
+      } else if (schematic) ignored.push(c);
+      else for (const piece of c.split(",").length > 2 ? c.split(",") : [c]) {
+        const e = parseItem(piece);
+        if (e) cur.push(e);
+        else if (piece.trim()) ignored.push(piece.trim());
+      }
+    }
+  }
+  if (cur.length) chambers.push(cur);
+  const seen = new Set();
+  const out = chambers.map(ch => ch.filter(e => { const k = nameKey(e.name); return !seen.has(k) && seen.add(k); }));
+  return { chambers: out.filter(c => c.length), ignored: ignored.slice(0, 50) };
+}
+
+/* Matching (port of app.py match_entry) */
+const SCHOOL_STOP = new Set(["the", "high", "school", "hs", "sr", "senior", "of", "and", "at", "upper", "secondary", "prep", "preparatory", "academy", "college", "h", "s"]);
+const schoolTokens = s => new Set(words(nameKey(s)).filter(t => !SCHOOL_STOP.has(t)));
+const overlap = (a, b) => a.size && b.size ? [...a].filter(t => b.has(t)).length / Math.min(a.size, b.size) : 0;
+const bestOverlap = (school, p) => Math.max(0, ...(p.schools || []).map(x => overlap(schoolTokens(school), schoolTokens(x))));
+const recency = p => [p.last, p.n];
+const cmp = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] > b[i] ? 1 : -1; return 0; };
+const maxBy = (xs, f) => xs.reduce((m, x) => cmp(f(x), f(m)) > 0 ? x : m);
+
+function ratio(a, b) {
+  const m = (a0, a1, b0, b1) => {
+    let bi = 0, bj = 0, bk = 0;
+    for (let i = a0; i < a1; i++) for (let j = b0; j < b1; j++) {
+      let k = 0;
+      while (i + k < a1 && j + k < b1 && a[i + k] === b[j + k]) k++;
+      if (k > bk) [bi, bj, bk] = [i, j, k];
+    }
+    return bk && bk + m(a0, bi, b0, bj) + m(bi + bk, a1, bj + bk, b1);
+  };
+  return 2 * m(0, a.length, 0, b.length) / (a.length + b.length);
+}
+
+// ponytail: linear scan of every name (difflib.get_close_matches, cutoff .85); bucket by length if names.json gets huge
+function closeMatches(word, names) {
+  const need = new Map();
+  for (const c of word) need.set(c, (need.get(c) || 0) + 1);
+  const hits = [];
+  for (const [x] of names) {
+    const total = x.length + word.length;
+    if (2 * Math.min(x.length, word.length) / total < 0.85) continue;
+    const used = new Map();
+    let common = 0;
+    for (const c of x) if ((used.get(c) || 0) < (need.get(c) || 0)) { used.set(c, (used.get(c) || 0) + 1); common++; }
+    if (2 * common / total < 0.85) continue;
+    const r = ratio(x, word);
+    if (r >= 0.85) hits.push([r, x]);
+  }
+  return hits.sort((p, q) => q[0] - p[0] || (q[1] > p[1] ? 1 : -1)).slice(0, 4).map(h => h[1]);
+}
+
+async function matchEntry(e) {
+  const key = nameKey(e.name), school = e.school || null, forced = e.pid;
+  const out = { match: "none", pid: null, ambiguous: false, school_mismatch: false, candidates: [], suggestions: [] };
+  let ps = [], how = "none", person = null;
+  if (forced !== "none") {
+    ps = await people(key);
+    how = "exact";
+    const toks = key.split(" ");
+    if (!ps.length && toks.length >= 2) {
+      const fk = `${toks[0]} ${toks.at(-1)}`, s = await shard(fk);
+      const keys = [...new Set([...(own(s.n, fk) ? [fk] : []), ...(own(s.fl, fk) || [])])].filter(k => k !== key).sort();
+      ps = (await Promise.all(keys.map(people))).flat();
+      how = "first-last";
+    }
+  }
+  out.candidates = ps.map(p => ({ pid: p.pid, school: p.school || "", n: p.n, last: p.last }));
+  if (forced && forced !== "none") person = (await people(forced.slice(0, forced.lastIndexOf("#")))).find(p => p.pid === forced) || null;
+  if (person) Object.assign(out, { match: ps.some(p => p.pid === forced) ? how : "picked", pid: forced });
+  else if (ps.length) {
+    if (school) {
+      person = maxBy(ps, p => [bestOverlap(school, p), ...recency(p)]);
+      out.school_mismatch = bestOverlap(school, person) < 0.5;
+    } else {
+      person = maxBy(ps, recency);
+      out.ambiguous = ps.length > 1;
+    }
+    Object.assign(out, { match: how, pid: person.pid });
+  }
+  if (!out.pid && key) {
+    const names = await loadNames();
+    for (const k of closeMatches(key, names).filter(k => k !== key).slice(0, 3)) {
+      const ks = await people(k);
+      if (!ks.length) continue;
+      const p = maxBy(ks, recency);
+      out.suggestions.push({ pid: p.pid, name: p.name, school: p.school || "" });
+    }
+  }
+  return [out, person];
+}
+
+/* Chamber math (port of app.py api_report) */
+const UNKNOWN_R = 15, SD_KNOWN = 15, SD_UNKNOWN = 22, SIMS = 5000, SEED = 7, P_FLOOR = 0.03, P_CEIL = 0.95;
+const TIER_ORDER = ["Final Boss", "TOC-Bound", "Bid Hunter", "Circuit Regular", "Local Menace", "Free Real Estate", "Mystery Box"];
+const advancing = n => clamp(Math.round(n / 3), 3, 6);
+const mean = xs => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+function chamberStrength(ratings, adv) {
+  const rs = ratings.map(r => r ?? UNKNOWN_R).sort((a, b) => b - a);
+  if (!rs.length) return 0;
+  const top = rs.slice(0, adv), rest = rs.slice(adv);
+  return 0.75 * mean(top) + 0.25 * mean(rest.length ? rest : top);
+}
+
+function mulberry32(a) {
+  return () => {
+    a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function simulate(mu, sd, others, adv) {
+  const rand = mulberry32(SEED);
+  const gauss = (m, s) => m + s * Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
+  const field = others.map(r => r == null ? [UNKNOWN_R, SD_UNKNOWN] : [r, SD_KNOWN]);
+  let hits = 0, total = 0;
+  for (let s = 0; s < SIMS; s++) {
+    const x = gauss(mu, sd);
+    let ahead = 0;
+    for (const [m, d] of field) ahead += gauss(m, d) > x;
+    hits += ahead < adv;
+    total += ahead;
+  }
+  return [clamp(hits / SIMS, P_FLOOR, P_CEIL), 1 + total / SIMS];
+}
+
+const friedLabel = f => [[95, "Charcoal"], [85, "Deep Fried"], [70, "Crispy"], [50, "Golden Brown"], [25, "Lightly Toasted"], [0, "Raw"]].find(([c]) => f >= c)[1];
+const threatVs = (r, rMe) => (d => d > 15 ? "Problem" : d >= -15 ? "Coin flip" : "You've got this")((r ?? UNKNOWN_R) - rMe);
+function chamberLabel(s, [t1, t2, t3, t4]) {
+  return s < t1 ? "Open Season" : s < t2 ? "Manageable" : s < t3 ? "Spicy" : s < t4 ? "Stacked" : "Group of Death";
+}
+
+async function buildReport(advIn) {
+  const meta = await load("data/meta.json");
+  const entries = S.entries.map(e => ({ ...e, name: words(e.name).join(" ").slice(0, 80) }));
+  const matched = await Promise.all(entries.map(matchEntry));
+  const rows = entries.map((e, i) => {
+    const [m, p] = matched[i];
+    return {
+      i, name: e.name, school: e.school || p?.school || null, po: !!e.po, is_me: false, matched_name: p?.name ?? null,
+      schools: p?.schools || [], ...m, rating: p ? p.rating : null, tier: p?.tier || "Mystery Box", confidence: p?.confidence || 0,
+      threat: null, badges: p?.badges || [], bids: p?.bids || {}, stats: p?.stats || {}, top: p?.top || [],
+    };
+  });
+  const n = rows.length, adv = advIn >= 1 ? advIn : advancing(n), me = S.me;
+  const others = rows.filter(r => r.i !== me).map(r => r.rating);
+  const strength = chamberStrength(others, adv);
+  const found = rows.filter(r => r.rating != null).length;
+  let meBlock = null;
+  if (me != null) {
+    const mine = rows[me];
+    const [rMe, sd, source] = S.meRating != null ? [S.meRating, SD_KNOWN, "override"]
+      : mine.rating != null ? [mine.rating, SD_KNOWN, "history"] : [UNKNOWN_R, SD_UNKNOWN, "assumed"];
+    const [pBreak, avgFinish] = simulate(rMe, sd, others, adv);
+    const fried = Math.round(100 * (1 - pBreak));
+    meBlock = { i: me, name: mine.name, rating: rMe, source, p_break: pBreak, fried, label: friedLabel(fried), avg_finish: avgFinish };
+    mine.is_me = true;
+    for (const r of rows) if (r.i !== me) r.threat = threatVs(r.rating, rMe);
+  }
+  rows.sort((a, b) => (b.rating ?? UNKNOWN_R) - (a.rating ?? UNKNOWN_R) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return {
+    chamber: { n, adv, strength, label: chamberLabel(strength, meta.chamber_thresholds), known: found, unknown: n - found,
+               tiers: Object.fromEntries(TIER_ORDER.map(t => [t, rows.filter(r => r.tier === t).length])) },
+    me: meBlock, competitors: rows,
+  };
+}
+
+/* Coverage line */
+load("data/meta.json").then(m => {
+  for (const [raw, k] of m.key_tests || []) if (nameKey(raw) !== k) console.error("name_key mismatch", { raw, js: nameKey(raw), py: k });
+  for (const [k, h] of m.hash_tests || []) if (shardOf(k) !== h) console.error("shard hash mismatch", { key: k, js: shardOf(k), py: h });
+  const span = `${m.seasons[0]} to ${m.seasons.at(-1)}`;
+  $("#status").textContent = `Tabroom data through ${new Date(m.built_at).toLocaleDateString([], { dateStyle: "medium" })}: ` +
+    `${m.tournaments.toLocaleString()} tournaments, ${m.people.toLocaleString()} competitors, ${span}.`;
+  $("#coverage").textContent = `Covers varsity Congress results from every Tabroom circuit, ${span}. Anyone without a varsity Congress result on Tabroom shows up as a Mystery Box.`;
+}, e => { $("#status").textContent = e.message; });
+
+/* Paste box */
+const ta = $("#paste"), gutter = $("#gutter");
+function syncGutter() {
+  const n = Math.max(ta.value.split("\n").length, 10);
+  gutter.textContent = Array.from({ length: n }, (_, i) => i + 1).join("\n");
+  gutter.scrollTop = ta.scrollTop;
+}
+ta.addEventListener("input", syncGutter);
+ta.addEventListener("scroll", () => { gutter.scrollTop = ta.scrollTop; });
+ta.addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $("#paste-form").requestSubmit(); } });
+syncGutter();
+
+$("#paste-form").onsubmit = async e => {
+  e.preventDefault();
+  const err = $("#paste-err"), btn = $("#roll");
+  err.textContent = "";
+  const text = ta.value;
+  if (!text.trim()) { err.textContent = "No names found. Paste the chamber list, one name per line."; return; }
+  btn.disabled = true;
+  if (!known) btn.textContent = "Loading names…";
+  try {
+    await loadNames();
+    const { chambers, ignored } = parsePaste(text, known);
+    if (!chambers.length) { err.textContent = "No names found. Paste the chamber list, one name per line."; return; }
+    Object.assign(S, { text, chambers, ignored });
+    pickChamber(0);
+    $("#confirm").hidden = false;
+    $("#confirm-h").focus();
+    $("#confirm").scrollIntoView({ block: "start" });
+  } catch (x) { err.textContent = x.message; }
+  finally { btn.disabled = false; btn.textContent = "Call the roll"; }
+};
+
+/* Confirm step */
+function pickChamber(ci) {
+  S.ci = ci;
+  S.entries = S.chambers[ci].map(e => ({ name: e.name, school: e.school || null, po: !!e.po, pid: null }));
+  Object.assign(S, { me: null, advTouched: false, meRating: null, editing: null, report: null });
+  $("#report").hidden = true;
+  renderConfirm();
+}
+
+function lineOf(s) {
+  const t = s.trim(), lines = S.text.split(/\r?\n/).map(l => l.replace(/[\u00a0\u200b]/g, " ").trim());
+  const k = lines.indexOf(t);
+  return (k >= 0 ? k : lines.findIndex(l => t && l.includes(t))) + 1;
+}
+
+function renderConfirm() {
+  const n = S.entries.length;
+  const def = clamp(Math.round(n / 3), 3, 6);
+  const adv = $("#adv");
+  if (!S.advTouched) adv.value = def;
+  adv.max = Math.max(1, n - 1);
+  $("#adv-note").textContent = `out of ${n}`;
+
+  const cp = $("#chamber-pick");
+  cp.hidden = S.chambers.length < 2;
+  cp.innerHTML = `<p class="seg-label" id="chamber-pick-l">We found ${S.chambers.length} chambers. Which one is yours?</p>` +
+    S.chambers.map((c, i) => `<button type="button" data-ci="${i}" aria-pressed="${i === S.ci}">Chamber ${i + 1} <span style="font-weight:400">(${c.length} names)</span></button>`).join("");
+
+  $("#chips").innerHTML = S.entries.map((e, i) => `
+    <li class="chip${i === S.me ? " is-me" : ""}">
+      <label><input type="radio" name="me" value="${i}" data-k="me-${i}"${i === S.me ? " checked" : ""}><span class="sr">This is me: ${esc(e.name)}</span></label>
+      ${S.editing === i
+        ? `<input class="chip-edit" data-edit-input="${i}" value="${esc(e.name)}" aria-label="Edit name">`
+        : `<button type="button" class="chip-name" data-edit="${i}" data-k="name-${i}" aria-label="${esc(e.name)}, edit name">${esc(e.name)}</button>`}
+      ${e.school ? `<span class="chip-school">${esc(e.school)}</span>` : ""}
+      ${e.po ? `<span class="tag" title="Presiding officer">PO</span>` : ""}
+      ${i === S.me ? `<span class="tag tag-me">This is me</span>` : ""}
+      <button type="button" class="chip-x" data-rm="${i}" data-k="rm-${i}" aria-label="Remove ${esc(e.name)}">&times;</button>
+    </li>`).join("");
+
+  const ig = $("#ignored");
+  ig.hidden = !S.ignored.length;
+  if (S.ignored.length) {
+    ig.querySelector("summary").textContent = `Ignored ${S.ignored.length} line${S.ignored.length === 1 ? "" : "s"} (judges and rooms)`;
+    ig.querySelector("ul").innerHTML = S.ignored.map(s => { const k = lineOf(s); return `<li>${k ? `Line ${k}: ` : ""}${esc(s.trim())}</li>`; }).join("");
+  }
+}
+
+function changed() {
+  const k = document.activeElement?.dataset?.k;
+  renderConfirm();
+  if (k) document.querySelector(`[data-k="${CSS.escape(k)}"]`)?.focus();
+  if (S.report) runReport();
+}
+
+function commitEdit(i, keep) {
+  if (S.editing !== i) return;
+  const v = document.querySelector(`[data-edit-input="${i}"]`)?.value.trim();
+  S.editing = null;
+  const dirty = keep && v && v !== S.entries[i].name;
+  if (dirty) Object.assign(S.entries[i], { name: v, pid: null });
+  renderConfirm();
+  document.querySelector(`[data-k="name-${i}"]`)?.focus();
+  if (dirty && S.report) runReport();
+}
+
+$("#confirm").addEventListener("click", e => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.dataset.ci !== undefined) { pickChamber(+t.dataset.ci); cpFocus(+t.dataset.ci); }
+  else if (t.dataset.rm !== undefined) {
+    const i = +t.dataset.rm;
+    S.entries.splice(i, 1);
+    if (S.me === i) { S.me = null; S.meRating = null; } else if (S.me > i) S.me--;
+    changed();
+  } else if (t.dataset.edit !== undefined) {
+    S.editing = +t.dataset.edit;
+    renderConfirm();
+    const inp = document.querySelector(`[data-edit-input="${S.editing}"]`);
+    inp.focus(); inp.select();
+  } else if (t.id === "run") run();
+});
+function cpFocus(ci) { document.querySelector(`[data-ci="${ci}"]`)?.focus(); }
+
+$("#chips").addEventListener("change", e => {
+  if (e.target.name !== "me") return;
+  S.me = +e.target.value;
+  S.meRating = null;
+  changed();
+});
+$("#chips").addEventListener("keydown", e => {
+  const i = e.target.dataset.editInput;
+  if (i === undefined) return;
+  if (e.key === "Enter") { e.preventDefault(); commitEdit(+i, true); }
+  if (e.key === "Escape") { e.preventDefault(); commitEdit(+i, false); }
+});
+$("#chips").addEventListener("focusout", e => {
+  const i = e.target.dataset.editInput;
+  if (i !== undefined) commitEdit(+i, true);
+});
+$("#add-form").onsubmit = e => {
+  e.preventDefault();
+  const inp = $("#add-name"), name = inp.value.trim();
+  if (!name) return;
+  S.entries.push({ name, school: null, po: false, pid: null });
+  inp.value = "";
+  changed();
+};
+let advTimer;
+$("#adv").addEventListener("input", () => {
+  S.advTouched = true;
+  clearTimeout(advTimer);
+  if (S.report && +$("#adv").value >= 1) advTimer = setTimeout(runReport, 300);
+});
+
+async function run() {
+  $("#run-err").textContent = "";
+  if (S.entries.length < 2) { $("#run-err").textContent = "Add at least two names to compare."; return; }
+  $("#run").disabled = true;
+  const ok = await runReport();
+  $("#run").disabled = false;
+  if (ok) { $("#rate-h").focus(); $("#rate-h").scrollIntoView({ block: "start" }); }
+}
+
+/* Report */
+let seq = 0;
+async function runReport(focusKey) {
+  const mine = ++seq;
+  try {
+    const r = await buildReport(Math.round(+$("#adv").value));
+    if (mine !== seq) return false;
+    $("#run-err").textContent = "";
+    S.report = r;
+    const k = focusKey || document.activeElement?.dataset?.k;
+    renderReport(r);
+    if (k) document.querySelector(`[data-k="${CSS.escape(k)}"]`)?.focus();
+    return true;
+  } catch (e) {
+    $("#run-err").textContent = e.message;
+    return false;
+  }
+}
+
+function vote(x) {
+  if (x.is_me) return { l: "me", t: "You" };
+  if (x.rating == null) return { l: "unlit", t: "Unknown" };
+  const t = x.threat || (d => d > 15 ? "Problem" : d >= -15 ? "Coin flip" : "You've got this")(x.rating - 15);
+  return { l: LIGHT[t], t };
+}
+const round = x => Math.round(x);
+
+function renderReport(r) {
+  $("#report").hidden = false;
+  $("#board").innerHTML = boardHTML(r);
+  $("#fried").innerHTML = friedHTML(r);
+  $("#ledger").innerHTML = ledgerHTML(r);
+}
+
+function boardHTML(r) {
+  const c = r.chamber, comps = r.competitors, votes = comps.map(vote);
+  const yeas = c.label === "Stacked" || c.label === "Group of Death";
+  const tally = [["red", "Problem"], ["amber", "Coin flip"], ["green", "You've got this"], ["unlit", "Unknown"]]
+    .map(([l, t]) => [l, t, votes.filter(v => v.l === l).length]);
+  const tiers = TIER_ORDER.filter(t => c.tiers?.[t]);
+  const mixText = tiers.map(t => `${c.tiers[t]} ${t}`).join(", ");
+  return `
+    <div class="board-top">
+      <div>
+        <span class="led led-xl" data-ghost="88" aria-hidden="true"><span>${round(c.strength)}</span></span>
+        <p class="led-cap"><span class="sr">Strength ${round(c.strength)} </span>Chamber strength, out of 100</p>
+      </div>
+      <div>
+        <p class="verdict-line">${yeas ? "The yeas have it." : "The nays have it."}</p>
+        <p class="verdict-label"><span class="light" data-l="${yeas ? "red" : c.label === "Spicy" ? "amber" : "green"}"></span>${esc(c.label)}</p>
+        <p class="blurb">${esc(CHAMBER_BLURB[c.label] || "")}</p>
+      </div>
+      <dl class="tally" aria-label="Lights on the board">
+        ${tally.map(([l, t, n]) => `<div><dt><span class="light" data-l="${l}"></span>${t}</dt><dd>${n}</dd></div>`).join("")}
+      </dl>
+    </div>
+    <div class="mix">
+      <div class="tierbar" role="img" aria-label="Tier mix: ${esc(mixText)}">
+        ${tiers.map(t => `<i style="flex-grow:${c.tiers[t]};background:var(${TIER_COLOR[t]})"></i>`).join("")}
+      </div>
+      <ul class="legend" aria-hidden="true">
+        ${tiers.map(t => `<li><i style="background:var(${TIER_COLOR[t]})"></i>${esc(t)} <b>${c.tiers[t]}</b></li>`).join("")}
+      </ul>
+      <p class="found">${c.known} of ${c.n} found on Tabroom. <span>${c.adv} spots break.</span></p>
+    </div>
+    <div class="roster-head" aria-hidden="true"><span></span><span>Competitor</span><span>Vote</span><span>Tier</span><span>Rating</span></div>
+    <ol class="roster" aria-label="Roster, strongest first">
+      ${comps.map((x, k) => {
+        const v = votes[k], school = x.school || x.schools?.[0];
+        return `<li class="row${x.is_me ? " is-me" : ""}" style="--i:${k}">
+          <span class="light" data-l="${v.l}"></span>
+          <span class="who"><span class="nm">${esc(x.name)}${x.po ? ` <span class="tag">PO</span>` : ""}</span>${school ? `<span class="sch">${esc(school)}</span>` : ""}</span>
+          <span class="meta"><span class="vote">${esc(v.t)}</span><span class="tier">${esc(x.tier)}</span></span>
+          <span class="rate">${x.rating == null
+            ? `<span class="bar"></span><span class="num" aria-label="Rating unknown">?</span>`
+            : `<span class="bar"><i style="width:${clamp(x.rating, 0, 100)}%"></i></span><span class="num"><span class="sr">Rating </span>${round(x.rating)}</span>`}</span>
+        </li>`;
+      }).join("")}
+    </ol>
+    ${r.me ? "" : `<p class="board-note">Nobody is marked as you, so the lights compare everyone to an unknown debater. Mark yourself above to make them personal.</p>`}`;
+}
+
+function friedHTML(r) {
+  const m = r.me;
+  if (!m) return `<p class="prompt">Mark yourself in the chamber list above (the circle next to your name) to see your break odds.</p>`;
+  const step = Math.max(0, FRIED.findIndex(([s]) => m.label.startsWith(s)));
+  const n = r.chamber.n;
+  return `
+    <div class="fried-top">
+      <div class="readout">
+        <span class="led led-lg" data-ghost="88" aria-hidden="true"><span>${m.fried}</span></span>
+        <p class="led-cap"><span class="sr">Fried score ${m.fried} </span>Fried, out of 100</p>
+      </div>
+      <div>
+        <p class="fried-label">${esc(m.label)}</p>
+        <p class="fried-blurb">${esc(FRIED[step][1])}</p>
+      </div>
+    </div>
+    <ol class="doneness" aria-label="Doneness scale">
+      ${FRIED.map(([s], i) => `<li style="--d:var(--d${i + 1})"${i === step ? ` aria-current="step"` : ""}>${s}${i === step ? `<span class="here">You're here</span>` : ""}</li>`).join("")}
+    </ol>
+    <dl class="figs">
+      <div><dt>Break odds</dt><dd>${round(m.p_break * 100)}%</dd></div>
+      <div><dt>Average finish</dt><dd>${m.avg_finish.toFixed(1)} <small>of ${n}</small></dd></div>
+    </dl>
+    <p class="my-rating">Your rating: <strong>${round(m.rating)}</strong>, ${SOURCE[m.source] || m.source}.</p>
+    ${m.source === "history" ? "" : `
+      <fieldset class="levels">
+        <legend>What level are you, roughly?</legend>
+        ${LEVELS.map(([t, v]) => `<label><input type="radio" name="lvl" value="${v}" data-k="lvl-${v}"${S.meRating === v ? " checked" : ""}><span>${t} <small>${v}</small></span></label>`).join("")}
+      </fieldset>`}`;
+}
+
+function ledgerHTML(r) {
+  const found = r.competitors.filter(x => x.rating != null);
+  const myst = r.competitors.filter(x => x.rating == null);
+  return found.map(entryHTML).join("") + (myst.length ? mysteryHTML(myst) : "") ||
+    `<p class="note" style="padding:1rem 0">Nobody in this chamber is on Tabroom yet.</p>`;
+}
+
+function entryHTML(x) {
+  const v = vote(x), conf = x.confidence ?? 0;
+  const notes = [];
+  if (x.ambiguous) notes.push("More than one person on Tabroom has this name. Pick the right one.");
+  if (x.school_mismatch) notes.push("Tabroom has this name at a different school. Make sure it's them.");
+  if (x.match === "first-last") notes.push("Matched on first and last name only.");
+  const bids = Object.entries(x.bids || {}).filter(([, n]) => n).map(([s, n]) => `${n} in ${s}`).join(", ");
+  const st = x.stats || {};
+  const pick = (x.ambiguous || x.school_mismatch || S.entries[x.i]?.pid) && x.candidates?.length > 1;
+  return `
+    <article class="entry">
+      <div class="entry-side">
+        <h3>${esc(x.name)}${x.is_me ? ` <span class="tag tag-me">You</span>` : ""}${x.po ? ` <span class="tag">PO</span>` : ""}</h3>
+        ${x.school || x.schools?.[0] ? `<p class="school">${esc(x.school || x.schools[0])}</p>` : ""}
+        <p class="entry-vote"><span class="light" data-l="${v.l}"></span>${esc(v.t)}</p>
+        <p class="score">${round(x.rating)} <small>rating</small></p>
+      </div>
+      <div class="entry-main">
+        <p class="entry-tier"><strong>${esc(x.tier)}.</strong> ${esc(TIER_BLURB[x.tier] || "")}</p>
+        ${notes.length ? `<p class="note">${esc(notes.join(" "))}</p>` : ""}
+        ${x.top?.length ? `<ol class="results" aria-label="Best results">${x.top.slice(0, 3).map(t =>
+          `<li><span class="res">${esc(t.label)}</span>${t.bid ? `<span class="tag">Bid</span>` : ""}<span class="lvl">${esc(t.tier === "local" ? "Local" : t.tier)}</span></li>`).join("")}</ol>` : ""}
+        ${x.badges?.length ? `<ul class="badges" aria-label="Badges">${x.badges.map(b => `<li>${esc(b)}</li>`).join("")}</ul>` : ""}
+        <dl class="stats">
+          <div><dt>Tournaments</dt><dd>${st.tournaments ?? 0}</dd></div>
+          <div><dt>Breaks</dt><dd>${st.breaks ?? 0}</dd></div>
+          <div><dt>Finals</dt><dd>${st.finals ?? 0}</dd></div>
+          <div><dt>Wins</dt><dd>${st.wins ?? 0}</dd></div>
+          ${bids ? `<div><dt>Bids</dt><dd>${esc(bids)}</dd></div>` : ""}
+          <div><dt>Confidence</dt><dd><span class="dots" role="img" aria-label="Confidence ${conf} of 3">${[1, 2, 3].map(d => `<i${d <= conf ? ` class="on"` : ""}></i>`).join("")}</span></dd></div>
+        </dl>
+        ${x.schools?.length > 1 || (x.schools?.[0] && x.schools[0] !== (x.school || x.schools[0])) ? `<p class="schools">Schools on Tabroom: ${x.schools.map(esc).join("; ")}</p>` : ""}
+        <p class="fix">
+          ${pick ? `<label>Which ${esc(x.name)}?
+            <select data-pick="${x.i}" data-k="pick-${x.i}">
+              ${x.candidates.map(c => `<option value="${esc(c.pid)}"${c.pid === x.pid ? " selected" : ""}>${esc(c.school)}, ${c.n} results, last ${esc(c.last)}</option>`).join("")}
+              <option value="none">None of these</option>
+            </select></label>` : ""}
+          <button type="button" class="linkbtn" data-notme="${x.i}" data-k="notme-${x.i}">Not them</button>
+        </p>
+      </div>
+    </article>`;
+}
+
+function mysteryHTML(myst) {
+  return `
+    <article class="entry">
+      <div class="entry-side">
+        <h3>Mystery Boxes</h3>
+        <p class="entry-vote"><span class="light" data-l="unlit"></span>Unknown</p>
+        <p class="score">${myst.length} <small>${myst.length === 1 ? "person" : "people"}</small></p>
+      </div>
+      <div class="entry-main">
+        <p class="entry-tier"><strong>Mystery Box.</strong> ${esc(TIER_BLURB["Mystery Box"])}</p>
+        <ul class="myst">
+          ${myst.map(x => {
+            const forced = S.entries[x.i]?.pid === "none";
+            const sugg = x.suggestions || [];
+            return `<li><span class="nm">${esc(x.name)}${x.is_me ? ` <span class="tag tag-me">You</span>` : ""}</span>
+              ${forced ? `<span class="dym">Marked as not them. <button type="button" class="linkbtn" data-undo="${x.i}" data-k="undo-${x.i}">Undo</button></span>`
+                : sugg.length ? `<span class="dym">Did you mean ${sugg.map((s, j) => `<button type="button" class="sugg" data-sugg="${x.i}" data-j="${j}" data-k="sugg-${x.i}-${j}">${esc(s.name)}${s.school ? `, ${esc(s.school)}` : ""}</button>`).join("")}</span>`
+                : `<span class="dym">No close matches on Tabroom.</span>`}
+            </li>`;
+          }).join("")}
+        </ul>
+        <p class="note">Each one counts as a rating of 15 in the chamber math. Fix a misspelled name in the chamber list above, or pick a match.</p>
+      </div>
+    </article>`;
+}
+
+function setPid(i, pid, name) {
+  const e = S.entries[i];
+  if (!e) return;
+  e.pid = pid;
+  if (name) e.name = name;
+  if (name) renderConfirm();
+  runReport(pid === "none" ? `undo-${i}` : `notme-${i}`);
+}
+
+$("#report").addEventListener("click", e => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  const d = t.dataset;
+  if (d.notme !== undefined) setPid(+d.notme, "none");
+  else if (d.undo !== undefined) setPid(+d.undo, null);
+  else if (d.sugg !== undefined) {
+    const x = S.report.competitors.find(c => c.i === +d.sugg), s = x?.suggestions?.[+d.j];
+    if (s) setPid(+d.sugg, s.pid, s.name);
+  }
+});
+$("#report").addEventListener("change", e => {
+  const t = e.target;
+  if (t.dataset.pick !== undefined) setPid(+t.dataset.pick, t.value);
+  else if (t.name === "lvl") { S.meRating = +t.value; runReport(); }
+});
+
+</script>
+</body>
+</html>
