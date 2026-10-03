@@ -116,10 +116,10 @@
 .ab-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); gap: 1.75rem 2.5rem; align-items: start; }
 .ab-tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .ab-tbl caption { text-align: left; font-weight: 750; padding-bottom: .375rem; }
-.ab-tbl th, .ab-tbl td { padding: .3125rem .75rem .3125rem 0; border-bottom: 1px solid var(--rule); text-align: left; font-weight: 400; white-space: nowrap; }
+.ab-tbl th, .ab-tbl td { padding: .3125rem .75rem .3125rem 0; border-bottom: 1px solid var(--rule); text-align: left; font-weight: 400; }
 .ab-tbl th:last-child, .ab-tbl td:last-child { padding-right: 0; }
 .ab-tbl thead th { font-size: .75rem; font-weight: 600; color: var(--ink-2); border-bottom-color: var(--ink); }
-.ab-tbl .is-num { text-align: right; }
+.ab-tbl .is-num { text-align: right; white-space: nowrap; }
 .ab-tbl tbody th { font-weight: 600; }
 .ab-bands { max-width: 32rem; }
 .ab-bands .light { vertical-align: -.0625rem; }
