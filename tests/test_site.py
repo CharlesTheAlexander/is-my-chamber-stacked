@@ -106,8 +106,8 @@ def test_sample_marks_someone_as_you(make_page, base):
     page.locator("#paste-form [data-sample]").click()
     expect(page.locator("#report .fried-label")).to_be_visible()
     expect(page.locator("#report .row.is-me")).to_have_count(1)
-    expect(page.locator("#report .sample-note")).to_contain_text("Shown as ")
-    assert page.locator("#report .tally dd").first.text_content() != "16"
+    expect(page.locator("#report .sample-note")).to_contain_text("circuit regular")
+    expect(page.locator("#report .row.is-me")).to_contain_text("You")
     page.locator('#chips input[name=me]').first.check(force=True)
     expect(page.locator("#report .sample-note")).to_be_hidden()
     assert not errors

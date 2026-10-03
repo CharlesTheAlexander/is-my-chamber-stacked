@@ -25,6 +25,8 @@ A single stdlib-only script, `app.py`, does everything, and GitHub Actions runs 
 3. `--export site` builds `site/` (static JSON shards by name hash, rankings, calibration) and copies `index.html` and `assets/`.
 4. Tests run against the built site, then it deploys to GitHub Pages. A failing test blocks the deploy.
 
+To remove someone who asks (the About page links to a GitHub issue for this), add their name to `optout.txt`, one per line. The next export leaves them out of every page.
+
 ## Run locally
 
 ```

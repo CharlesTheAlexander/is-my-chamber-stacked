@@ -703,13 +703,21 @@ def sample_chamber(perfs: list[dict], people: dict[str, list[dict]], pid_of: dic
     year = max((p["date"][:4] for p in final), default="")
     rating = {p["pid"]: p["rating"] for ps in people.values() for p in ps}
     by_name = {p["name"]: rating[pid_of[(tid, p["ev"], p["eid"])]] for p in final}
-    me = min(by_name, key=lambda n: (by_name[n], n), default=None)
-    strength = chamber_strength([r for n, r in by_name.items() if n != me], advancing(len(final)))
+    strength = chamber_strength(list(by_name.values()), advancing(len(final) + 1))   # the demo adds an anonymous "You" seat
     return {"title": f"{year} Tournament of Champions final".strip(), "names": [p["name"] for p in final], "tid": tid,
-            "me": me, "strength": round(strength, 1)}
+            "strength": round(strength, 1)}
 
 
-def export(perfs: list[dict], out: Path, chambers: dict, index_html: Path = HERE / "index.html", assets: Path = HERE / "assets") -> dict:
+def read_optout(path: Path = HERE / "optout.txt") -> frozenset[str]:
+    """Names (one per line, # comments) whose owners asked to be left out of the site."""
+    if not path.exists():
+        return frozenset()
+    return frozenset(k for line in path.read_text().splitlines() if (k := name_key(line.split("#")[0])))
+
+
+def export(perfs: list[dict], out: Path, chambers: dict, index_html: Path = HERE / "index.html", assets: Path = HERE / "assets",
+           optout: frozenset[str] = frozenset()) -> dict:
+    perfs = [p for p in perfs if name_key(p["name"]) not in optout]
     people, pid_of = build_people(perfs)
     shards: list[dict] = [{"n": {}, "fl": {}} for _ in range(SHARDS)]
     for key, ps in people.items():
@@ -1098,8 +1106,11 @@ def check_v2_export() -> None:
         assert ch == {"strengths": [12.3, 40.1], "thresholds": CHAMBER_THRESHOLDS, "source": "2 real test chambers"}
         sm = data("sample.json")
         assert sm == {"title": f"{CURRENT_SEASON} Tournament of Champions final", "names": ["Final 1", "Final 2", "Final 3"], "tid": TOC_TID,
-                      "me": "Final 3", "strength": round(chamber_strength([people[n][0]["rating"] for n in ("final 1", "final 2")], 3), 1)}, sm
+                      "strength": round(chamber_strength([people[f"final {i}"][0]["rating"] for i in (1, 2, 3)], advancing(4)), 1)}, sm
         assert star_p["h"][star_p["b"]][1] == 1 and data("meta.json")["scoring"]["place"] == [12, 8, 6, 4, 3, 2]
+        (Path(d) / "optout.txt").write_text("Star Player  # asked to be removed\n\n")
+        export(perfs, out, chambers, assets=Path(d) / "assets", optout=read_optout(Path(d) / "optout.txt"))
+        assert "star player" not in {k for k, _ in data("names.json")} and all(r["pid"] != "star player#0" for r in data("rankings.json")["overall"])
     if CHAMBERS_FILE.exists():
         real = json.loads(CHAMBERS_FILE.read_text())
         st = real["strengths"]
@@ -1146,7 +1157,7 @@ def main() -> None:
     elif args.calibrate:
         calibrate(load_perfs(seasons, PERFS_DIR))
     else:
-        meta = export(load_perfs(seasons, PERFS_DIR), Path(args.export), load_chambers())
+        meta = export(load_perfs(seasons, PERFS_DIR), Path(args.export), load_chambers(), optout=read_optout())
         log(f"exported {meta['tournaments']} tournaments, {meta['people']} people, {meta['perfs']} perfs to {args.export}")
 
 

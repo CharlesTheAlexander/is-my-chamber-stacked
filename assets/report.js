@@ -504,7 +504,8 @@ function mysteryHTML(myst, ro) {
           ${myst.map(x => {
             const forced = x.pin === "none", sugg = x.suggestions || [];
             return `<li><span class="nm">${esc(x.name)}${x.is_me ? ` <span class="tag tag-me">${ro ? "Shared this" : "You"}</span>` : ""}</span>
-              ${forced ? `<span class="dym">Marked as not them.${ro ? "" : ` <button type="button" class="linkbtn" data-undo="${x.i}" data-k="undo-${x.i}">Undo</button>`}</span>`
+              ${forced && x.is_me ? `<span class="dym">Rated at the level you picked.</span>`
+                : forced ? `<span class="dym">Marked as not them.${ro ? "" : ` <button type="button" class="linkbtn" data-undo="${x.i}" data-k="undo-${x.i}">Undo</button>`}</span>`
                 : ro ? `<span class="dym">Not on Tabroom.</span>`
                 : sugg.length ? `<span class="dym">Did you mean ${sugg.map((s, j) => `<button type="button" class="sugg" data-sugg="${x.i}" data-j="${j}" data-k="sugg-${x.i}-${j}">${esc(s.name)}${s.school ? `, ${esc(s.school)}` : ""}</button>`).join("")}</span>`
                 : `<span class="dym">No close matches on Tabroom.</span>`}
@@ -699,10 +700,11 @@ async function trySample() {
     ta.value = names.join("\n");
     syncGutter();
     if (!await callRoll()) return;
-    const me = S.entries.findIndex(e => e.name === s.me);
-    if (me >= 0) { S.me = me; renderConfirm(); }
-    if (await run() && me >= 0) {
-      R.foot.textContent = `Shown as ${s.me}, the lowest-rated member. Pick yourself above.`;
+    S.entries.push({ name: "You", school: null, po: false, pid: "none" });
+    Object.assign(S, { me: S.entries.length - 1, meRating: 35 });
+    renderConfirm();
+    if (await run()) {
+      R.foot.textContent = "You're shown as a circuit regular dropped into this final. Change your level below, or paste your own chamber.";
       R.foot.hidden = false;
     }
   } catch (x) { err.textContent = x.message; }
