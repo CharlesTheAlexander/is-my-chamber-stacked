@@ -48,8 +48,8 @@ NAME_TIERS = [
 ]
 SHARDS = 256
 CAL_SEASON, MIN_CHAMBER = 2025, 6
-# 20th/45th/70th/90th percentile of chamber_strength over the 173 real 2025-26 circuit-228 prelim chambers (--calibrate, run 2026-10-03)
-CHAMBER_THRESHOLDS = [29.4, 46.0, 54.4, 64.4]
+# 20th/45th/70th/90th percentile of chamber_strength over the real 2025-26 circuit-228 prelim chambers, members rated from perfs before each tournament (--calibrate, run 2026-10-03)
+CHAMBER_THRESHOLDS = [23.4, 36.7, 46.7, 61.4]
 KEY_TESTS = ["Diego Pa-Ortiz", "José O'Brien", "Zoë  Müller", "Mary–Kate Smith Jr.", "D’Angelo Smith", "ANNA_MARIE  LEE",
              "J.R. Smith", "Núñez  Peña", "  Leading Space ", "Łukasz Żółć", "ﬁsh Name", "Ångström‐Lund"]
 HASH_TESTS = ["a", "foobar", "diego pa ortiz", "maria annie domingues", "zoe muller", "emily lin"]
@@ -67,7 +67,7 @@ TOPK, DECAY, SCALE = 6, 0.7, 45
 UNKNOWN_R = 15
 SCHOOL_STOP = {"the", "high", "school", "hs", "sr", "senior", "of", "and", "at", "upper", "secondary", "prep", "preparatory",
                "academy", "college", "h", "s"}
-INDEP = re.compile(r"\b(?:independent|unaffiliated|home ?schooled?|club|institute|society|debate|speech|forensics?)\b")
+INDEP = re.compile(r"\b(?:indep\w*|individual|unaffiliated|home ?schooled?|club|institute|society|debate|speech|forensics?)\b")
 
 
 def log(msg: str) -> None:
@@ -93,6 +93,7 @@ def shard_of(key: str) -> int:
 DEPTHS = "POQSF"
 SKIP_EVENT = re.compile(r"\b(ms|middle|jv|junior varsity|novice|nov|round robin|rr)\b", re.I)
 SKIP_SET = re.compile(r"consol|\bpo\b|presiding", re.I)
+FINAL_PLACE = re.compile(r"^(?:(\d+)(?:st|nd|rd|th)(?:-T(?:ie)?)?|co-champion|finals?)$", re.I)
 
 
 def stage_of(label: str) -> str | None:
@@ -181,7 +182,9 @@ def extract(tier_forced: str | None, plan_rows: list[tuple[str, str | None, dict
     for role, stage, stub in plan_rows:
         rs = _rows(fetched[stub["id"]])
         sizes = Counter(r.get("section") for r in rs)
-        single_section = len(sizes) == 1
+        single_section = len(sizes) == 1 and len({r.get("rank") for r in rs}) > 1
+        ranked = sum(bool(FINAL_PLACE.match(str(r.get("place") or ""))) for r in rs)
+        everyone_ranked = len(rs) > 12 and ranked >= 0.9 * len(rs)   # ponytail: a <= 12 row set can't be told from a real final
         for r in rs:
             e = r.get("Entry") or {}
             if not e.get("id"):
@@ -200,11 +203,15 @@ def extract(tier_forced: str | None, plan_rows: list[tuple[str, str | None, dict
                     p["pct"] = float(r["percentile"]) / 100
             elif role == "final-places":
                 pl = str(r.get("place") or "")
-                if m := re.match(r"^(\d+)(st|nd|rd|th)$", pl):
-                    p["depth"], p["place"] = "F", int(m.group(1))
+                if m := FINAL_PLACE.match(pl):
+                    d, place = ("P", None) if everyone_ranked else ("F", int(m.group(1) or r.get("rank") or 0) or None)
                 else:
-                    p["depth"] = ("S" if re.match(r"sem", pl, re.I) else "Q" if re.match(r"qu|qtr", pl, re.I)
-                                  else "O" if re.match(r"oct|doub", pl, re.I) else "P")
+                    d, place = ("S" if re.match(r"sem", pl, re.I) else "Q" if re.match(r"qu|qtr", pl, re.I)
+                                else "O" if re.match(r"oct|doub", pl, re.I) else "P"), None
+                if DEPTHS.index(d) > DEPTHS.index(p["depth"]):
+                    p["depth"] = d
+                if d == "F":
+                    p["place"] = min(filter(None, (p["place"], place)), default=None)
                 if r.get("percentile") is not None:
                     p["pct"] = float(r["percentile"]) / 100
             elif role == "bid":
@@ -558,12 +565,15 @@ def group_schools(schools: list[str], twins: set[frozenset[str]]) -> dict[str, s
 
 
 def cluster(perfs: list[dict]) -> list[list[dict]]:
-    """One name's perfs split into people by school. Same-name entries in one event prove two people, so their
-    schools never merge directly. Independent/club-style entries join the name's largest real-school cluster."""
+    """One person per name unless a single event holds two same-name entries from different schools, which proves two
+    people: then perfs are split by school overlap, never merging the proven pair directly. Independent/club-style
+    entries join the largest real-school cluster."""
     in_event: dict[tuple, dict[int, str]] = {}
     for p in perfs:
         in_event.setdefault((p["tid"], p["ev"]), {})[p["eid"]] = p["school"]
     twins = {frozenset(pair) for d in in_event.values() for pair in combinations(sorted(set(d.values())), 2)}
+    if not twins:
+        return [perfs]
     schools = {p["school"] for p in perfs}
     indep = {s for s in schools if not s or INDEP.search(name_key(s))}
     real = schools - indep
@@ -647,12 +657,14 @@ def export(perfs: list[dict], out: Path, index_html: Path = HERE / "index.html")
 
 # ---------------------------------------------------------------- calibration
 
-def chamber_strengths(rating_of: dict[str, float], pid_of: dict[tuple, str]) -> tuple[list[float], int, int]:
-    """Strength of every real CAL_SEASON circuit-228 prelim chamber, rated with today's ratings (so a chamber's own
-    results are part of its members' ratings; accepted for calibration). Also returns (members rated, members total)."""
+def chamber_strengths(perfs: list[dict]) -> tuple[list[float], int, int]:
+    """Strength of every real CAL_SEASON circuit-228 prelim chamber as a user would have pasted it: members are rated only
+    from perfs dated before the tournament, counted from CAL_SEASON, with the default bare-name pick. Also returns
+    (members rated, members total)."""
+    global CURRENT_SEASON
+    CURRENT_SEASON = CAL_SEASON
     url = f"{BASE}/tourns?circuit={CIRCUIT}&startAfter={CAL_SEASON}-07-01T00:00:00Z&startBefore={CAL_SEASON + 1}-07-01T00:00:00Z&limit=500&publishedResults=true"
-    out: list[float] = []
-    rated = total = 0
+    by_day: dict[str, list[list[str]]] = {}
     for t in cached(f"tourns-{CAL_SEASON}", url, PERMANENT) or []:
         if t.get("hidden"):
             continue
@@ -664,23 +676,26 @@ def chamber_strengths(rating_of: dict[str, float], pid_of: dict[tuple, str]) -> 
             for sid, rows in data.items():
                 if size[sid] < 0.6 * max(size.values()):
                     continue
-                chambers: dict[Any, list[int]] = {}
+                chambers: dict[Any, dict[int, str]] = {}
                 for x in rows:
                     if (x.get("Entry") or {}).get("id"):
-                        chambers.setdefault(x.get("section"), []).append(x["Entry"]["id"])
-                for eids in chambers.values():
-                    if len(eids) >= MIN_CHAMBER:
-                        rs = [rating_of.get(pid_of.get((tid, ev["id"], e), "")) for e in eids]
-                        rated += sum(r is not None for r in rs)
-                        total += len(rs)
-                        out.append(chamber_strength(rs, advancing(len(rs))))
+                        chambers.setdefault(x.get("section"), {})[x["Entry"]["id"]] = name_key(x["Entry"].get("name") or "")
+                by_day.setdefault(t["start"][:10], []).extend(list(c.values()) for c in chambers.values() if len(c) >= MIN_CHAMBER)
+    out: list[float] = []
+    rated = total = 0
+    for day, chambers in sorted(by_day.items()):
+        need = {k for c in chambers for k in c}
+        people, _ = build_people([p for p in perfs if p["date"] < day and p["key"] in need])
+        for keys in chambers:
+            rs = [max(ps, key=lambda p: (p["last"], p["n"]))["rating"] if (ps := people.get(k)) else None for k in keys]
+            rated += sum(r is not None for r in rs)
+            total += len(rs)
+            out.append(chamber_strength(rs, advancing(len(rs))))
     return out, rated, total
 
 
 def calibrate(perfs: list[dict]) -> None:
-    people, pid_of = build_people(perfs)
-    rating_of = {p["pid"]: p["rating"] for ps in people.values() for p in ps}
-    strengths, rated, total = chamber_strengths(rating_of, pid_of)
+    strengths, rated, total = chamber_strengths(perfs)
     if len(strengths) < 100:
         sys.exit(f"only {len(strengths)} chambers found; is the {season_label(CAL_SEASON)} circuit-228 data in cache/?")
     cuts = statistics.quantiles(strengths, n=100, method="inclusive")
@@ -740,6 +755,17 @@ def check_extraction() -> None:
     rows = [_row(1, "A", place="1st", percentile="99"), _row(2, "B", place="Semi", percentile="80"), _row(3, "C", place="Prelim", percentile="10")]
     p = {x["name"]: x for x in extract(None, pl, {9: _rs(9, "final", "FP", rows)})}
     assert (p["A"]["depth"], p["A"]["place"], p["B"]["depth"], p["C"]["depth"]) == ("F", 1, "S", "P") and p["A"]["tier"] == "local"
+    rows = [_row(1, "A", place="1st", rank=1, roundName=3), _row(2, "B", place="14th-T", rank=15, roundName=3),
+            _row(2, "B", place="Co-Champion", rank=14, roundName=3), _row(2, "B", place="Prelim", rank=1, roundName=3),
+            _row(3, "C", place="16th-Tie", rank=17, roundName=3), _row(4, "D", place="Prelim", roundName=2)]
+    p = {x["name"]: x for x in extract(None, pl, {9: _rs(9, "final", "FP", rows)})}
+    assert [(p[k]["depth"], p[k]["place"]) for k in "ABCD"] == [("F", 1), ("F", 14), ("F", 16), ("P", None)], p
+    rows = [_row(i, f"N{i}", place=ordinal(i), rank=i, roundName=3, percentile=str(100 - i)) for i in range(1, 16)]
+    p = extract(None, pl, {9: _rs(9, "final", "FP", rows)})
+    assert {x["depth"] for x in p} == {"P"} and all(x["pct"] for x in p), "a set that ranks every entrant has no finalists"
+    pl1 = plan({"ResultSets": [stub(1, "chamber", "Finals Chamber Results"), stub(2, "chamber", "Prelim Chamber Results")]})
+    same = lambda i: _rs(i, "chamber", "x", [_row(k, f"M{k}", rank=1, section="1") for k in range(1, 5)])
+    assert {x["place"] for x in extract(None, pl1, {1: same(1), 2: same(2)})} == {None}, "all-rank-1 final has no places"
 
     bk = {"ResultSets": [stub(11, "chamber", "Rd Chamber Results"), stub(12, "chamber", "Semis Chamber Results"),
                          stub(13, "chamber", "Exhib Chamber Results")]}
@@ -844,18 +870,22 @@ def check_cluster() -> None:
     kumar = [_mp("Pranika Kumar", "Edina High School", 1, 2), _mp("Pranika Kumar", "Kumar Independent", 2, 1),
              _mp("Pranika Kumar", "Edina HS", 3, 4)]
     assert [len(g) for g in cluster(kumar)] == [3], "independent and school variants are one person"
+    apart = [_mp("Emily Lin", "Castilleja School", 1, 1), _mp("Emily Lin", "Lynbrook High School", 3, 2)]
+    assert [len(g) for g in cluster(apart)] == [2], "different schools without a same-event twin stay one person"
     lin = [_mp("Emily Lin", "Castilleja School", 3, 1), _mp("Emily Lin", "Lynbrook High School", 3, 2)]
-    assert sorted(len(g) for g in cluster(lin)) == [1, 1]
+    assert sorted(len(g) for g in cluster(lin)) == [1, 1], "two same-name entries in one event are two people"
     twins = [_mp("Sam Lee", "Lincoln High School", 1, 1), _mp("Sam Lee", "Lincoln East High School", 1, 2)]
     assert len(cluster(twins)) == 2, "same-event twins never merge, even with overlapping school tokens"
     assert len(cluster([_mp("Sam Lee", "Lincoln High School", 1, 1), _mp("Sam Lee", "Lincoln East High School", 2, 1)])) == 1
-    two = [_mp("Ann Wu", "Alpha Academy", 1, 1), _mp("Ann Wu", "Alpha Academy", 2, 1), _mp("Ann Wu", "Beta Prep", 3, 1), _mp("Ann Wu", "Wu Independent", 4, 1)]
+    two = [_mp("Ann Wu", "Alpha Academy", 1, 1), _mp("Ann Wu", "Alpha Academy", 2, 1), _mp("Ann Wu", "Beta Prep", 3, 1),
+           _mp("Ann Wu", "Alpha Academy", 3, 2), _mp("Ann Wu", "Wu Indep.", 4, 1)]
     big = max(cluster(two), key=len)
-    assert sorted(len(g) for g in cluster(two)) == [1, 3] and any(p["school"] == "Wu Independent" for p in big)
+    assert sorted(len(g) for g in cluster(two)) == [1, 4] and any(p["school"] == "Wu Indep." for p in big)
     assert [len(g) for g in cluster([_mp("Solo Kid", "Solo Independent", 1, 1), _mp("Solo Kid", "Other Independent", 2, 1)])] == [2]
-    people, pid_of = build_people([_mp("Emily Lin", "Castilleja School", 1, 1), _mp("Emily Lin", "Lynbrook High School", 3, 2)])
-    assert [p["pid"] for p in people["emily lin"]] == ["emily lin#0", "emily lin#1"] and people["emily lin"][0]["school"] == "Lynbrook High School"
-    assert pid_of[(1, 1, 1)] == "emily lin#1"
+    people, pid_of = build_people(apart)
+    assert [p["pid"] for p in people["emily lin"]] == ["emily lin#0"] and pid_of[(1, 1, 1)] == "emily lin#0"
+    people, pid_of = build_people(lin)
+    assert [p["pid"] for p in people["emily lin"]] == ["emily lin#0", "emily lin#1"] and pid_of[(3, 1, 1)] != pid_of[(3, 1, 2)]
 
 
 def check_freeze_and_export() -> None:

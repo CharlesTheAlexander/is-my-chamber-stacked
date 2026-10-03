@@ -81,7 +81,7 @@ h1 { font-size: clamp(2.75rem, 8.5vw, 5.25rem); font-weight: 800; letter-spacing
 .bill-title { font-weight: 700; font-size: 1.0625rem; margin-bottom: .625rem; }
 .draft { display: flex; background: var(--sheet); border: 1px solid var(--rule); border-radius: 3px; }
 .draft:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
-.gutter { margin: 0; padding: .75rem .625rem .75rem .5rem; min-width: 2.75rem; text-align: right; border-right: 1px solid var(--rule); color: var(--ink-3); font: 500 .8125rem/1.75rem "Public Sans", system-ui, sans-serif; font-variant-numeric: tabular-nums; overflow: hidden; user-select: none; }
+.gutter { margin: 0; padding: .75rem .625rem .75rem .5rem; min-width: 2.75rem; text-align: right; border-right: 1px solid var(--rule); color: var(--ink-3); font: 500 .8125rem/1.75rem "Public Sans", system-ui, sans-serif; font-variant-numeric: tabular-nums; overflow: hidden; user-select: none; contain: size; }
 .draft textarea { flex: 1; min-width: 0; height: calc(10 * 1.75rem + 1.5rem + 12px); padding: .75rem; border: 0; background: transparent; color: inherit; font: 400 1rem/1.75rem "Public Sans", system-ui, sans-serif; resize: vertical; white-space: pre; overflow: auto; }
 .draft textarea:focus { outline: none; }
 .draft textarea::placeholder { color: var(--ink-3); }
@@ -108,6 +108,7 @@ h2:focus { outline: none; }
 .chips { list-style: none; padding: 0; margin: 1.25rem 0 0; display: flex; flex-wrap: wrap; gap: .5rem; }
 .chip { display: inline-flex; align-items: center; gap: .375rem; max-width: 100%; padding: .1875rem .1875rem .1875rem .5rem; background: var(--chip); border: 1px solid var(--rule); border-radius: 3px; }
 .chip.is-me { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.chip > label { display: grid; place-items: center; min-width: 2rem; min-height: 2rem; margin: -.25rem 0 -.25rem -.375rem; cursor: pointer; }
 .chip input[type="radio"] { margin: 0; width: 1rem; height: 1rem; accent-color: var(--ink); cursor: pointer; }
 .chip-name { font: 600 .9375rem/1.3 "Public Sans", system-ui, sans-serif; color: inherit; background: none; border: 0; padding: .25rem .125rem; cursor: text; text-align: left; overflow-wrap: anywhere; }
 .chip-name:hover { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: .2em; }
@@ -472,7 +473,7 @@ function parseItem(raw) {
 function parsePaste(text, dict) {
   text = text.normalize("NFKC").replace(/\u00a0/g, " ").replace(/\u200b/g, "");
   const lines = text.split(/\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/).map(l => l.trimEnd());
-  const isRun = c => words(c).length >= 5 && !/[,()|–—]|\s-\s/.test(c);
+  const isRun = c => words(c).length >= 8 && !/[,()|–—]|\s-\s/.test(c) && !NOISE.test(c);
   const schematic = lines.some(ln => ln.split("\t").some(c => isRun(c.trim())));
   const chambers = [], ignored = [];
   let cur = [];
@@ -681,6 +682,7 @@ function syncGutter() {
   gutter.scrollTop = ta.scrollTop;
 }
 ta.addEventListener("input", syncGutter);
+ta.addEventListener("focus", () => loadNames().catch(() => {}), { once: true });
 ta.addEventListener("scroll", () => { gutter.scrollTop = ta.scrollTop; });
 ta.addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $("#paste-form").requestSubmit(); } });
 syncGutter();
@@ -825,8 +827,10 @@ async function run() {
   $("#run-err").textContent = "";
   if (S.entries.length < 2) { $("#run-err").textContent = "Add at least two names to compare."; return; }
   $("#run").disabled = true;
+  $("#run").textContent = "Running…";
   const ok = await runReport();
   $("#run").disabled = false;
+  $("#run").textContent = "Run the numbers";
   if (ok) { $("#rate-h").focus(); $("#rate-h").scrollIntoView({ block: "start" }); }
 }
 
@@ -988,7 +992,7 @@ function entryHTML(x) {
               ${x.candidates.map(c => `<option value="${esc(c.pid)}"${c.pid === x.pid ? " selected" : ""}>${esc(c.school)}, ${c.n} results, last ${esc(c.last)}</option>`).join("")}
               <option value="none">None of these</option>
             </select></label>` : ""}
-          <button type="button" class="linkbtn" data-notme="${x.i}" data-k="notme-${x.i}">Not them</button>
+          <button type="button" class="linkbtn" data-notme="${x.i}" data-k="notme-${x.i}" aria-label="${x.is_me ? "Not me" : `Not ${esc(x.name)}`}">${x.is_me ? "Not me" : "Not them"}</button>
         </p>
       </div>
     </article>`;
