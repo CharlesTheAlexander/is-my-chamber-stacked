@@ -9,7 +9,7 @@ from playwright.sync_api import Page, expect, sync_playwright
 
 SITE = Path(os.environ.get("SITE_DIR", Path(__file__).resolve().parent.parent / "site"))
 PREFIX = "/is-my-chamber-stacked"
-ROUTES = ["#/", "#/lookup", "#/lookup?q=Bryan Dominguez", "#/rankings", "#/rankings?s=2025-26", "#/about"]
+ROUTES = ["#/", "#/lookup", "#/lookup?q=Bryan Dominguez", "#/rankings", "#/about"]
 YALE_A = (
     "Anna Gordeev Arthur Krukau Arya Tangirala Bennett Ortiz Bryan Dominguez Caden Huckelbridge "
     "Claire Hua Cybil Jeanfils Diya Vijayakumar Julia Brown Maya Khan Medha Thirumala Nikhil Khanna "
@@ -92,12 +92,63 @@ def test_home_has_meta_line(make_page, base):
 def test_sample_button_reports_a_chamber(make_page, base):
     page, errors = make_page()
     open_home(page, base)
-    page.click("#sample")
+    page.locator("#paste-form [data-sample]").click()
     expect(page.locator("#report .verdict-label")).to_be_visible()
     assert page.text_content("#report .verdict-label").strip()
     found = page.text_content("#report .found")
     assert int(found.split(" of ")[0].strip()) >= 10, found
     assert not errors
+
+
+def test_sample_marks_someone_as_you(make_page, base):
+    page, errors = make_page()
+    open_home(page, base)
+    page.locator("#paste-form [data-sample]").click()
+    expect(page.locator("#report .fried-label")).to_be_visible()
+    expect(page.locator("#report .row.is-me")).to_have_count(1)
+    expect(page.locator("#report .sample-note")).to_contain_text("Shown as ")
+    assert page.locator("#report .tally dd").first.text_content() != "16"
+    page.locator('#chips input[name=me]').first.check(force=True)
+    expect(page.locator("#report .sample-note")).to_be_hidden()
+    assert not errors
+
+
+def test_teaser_matches_the_sample_report(make_page, base):
+    page, errors = make_page()
+    open_home(page, base)
+    expect(page.locator("#teaser")).to_be_visible()
+    shown = page.text_content("#teaser-n"), page.text_content("#teaser-label")
+    page.locator("#teaser [data-sample]").click()
+    expect(page.locator("#report .verdict-label")).to_be_visible()
+    assert (page.text_content("#report .led-xl > span"), page.text_content("#report .verdict-label").strip()) == shown
+    assert not errors
+
+
+def test_teaser_is_hidden_on_phones(make_page, base):
+    page, _ = make_page(375, 812)
+    open_home(page, base)
+    page.wait_for_load_state("networkidle")
+    expect(page.locator("#teaser")).to_be_hidden()
+    expect(page.locator("#paste-form [data-sample]")).to_be_visible()
+
+
+def test_report_collapses_all_but_the_top_five_competitors(make_page, base):
+    page, errors = make_page()
+    run_yale(page, base)
+    assert page.locator("#report .ledger > .entry h3").count() <= 6
+    more = page.locator("#report details.more")
+    expect(more).to_have_count(1)
+    assert not more.evaluate("d => d.open")
+    page.evaluate("dispatchEvent(new Event('beforeprint'))")
+    assert more.evaluate("d => d.open")
+    assert not errors
+
+
+def test_phone_nav_fits_on_one_row(make_page, base):
+    page, _ = make_page(375, 812)
+    open_home(page, base)
+    assert page.locator(".site-head").bounding_box()["height"] < 100
+    assert page.locator(".nav a", has_text="Check a chamber").get_attribute("data-route") == ""
 
 
 def test_yale_example_shows_fried_section(make_page, base):
@@ -128,11 +179,45 @@ def test_share_link_round_trip(make_page, base):
 def test_report_lookup_link_opens_profile(make_page, base):
     page, errors = make_page()
     open_home(page, base)
-    page.click("#sample")
+    page.locator("#paste-form [data-sample]").click()
     expect(page.locator("#report a.who-link").first).to_be_visible()
     page.locator("#report a.who-link").first.click()
     expect(page.locator(".lk-name")).to_be_visible()
     assert page.url.split("#")[1].startswith("/lookup?pid=")
+    assert not errors
+
+
+def share_and_open(page: Page, base: str, extra: str | None = None, adv: str | None = None) -> Page:
+    open_home(page, base)
+    page.fill("#paste", YALE_A)
+    page.click("#roll")
+    expect(page.locator("#chips li")).to_have_count(15)
+    if extra:
+        page.fill("#add-name", extra)
+        page.click("#add-form button")
+    if adv:
+        page.fill("#adv", adv)
+    page.click("#run")
+    expect(page.locator("#report .found")).to_be_visible()
+    page.click("[data-share]")
+    shared = page.context.new_page()
+    shared.goto(page.input_value("#share-url"))
+    expect(shared.locator(".shared .found")).to_be_visible()
+    return shared
+
+
+def test_share_keeps_every_spots_value(make_page, base):
+    page, _ = make_page()
+    for adv in ("6", "14", "15"):
+        shared = share_and_open(page, base, adv=adv)
+        expect(shared.locator(".shared .found")).to_contain_text("14 spots break" if adv == "15" else f"{adv} spots break")
+        shared.close()
+
+
+def test_share_opens_with_a_letterless_name(make_page, base):
+    page, errors = make_page()
+    shared = share_and_open(page, base, extra="1234")
+    expect(shared.locator(".shared .found")).to_contain_text("of 16 found")
     assert not errors
 
 
@@ -178,9 +263,34 @@ def test_rankings_overall_and_filter(make_page, base):
 
 def test_rankings_season_tab(make_page, base):
     page, errors = make_page()
-    page.goto(base + "#/rankings?s=2025-26")
-    expect(page.locator(".roll tbody tr").first).to_be_visible()
+    page.goto(base + "#/rankings")
+    tab = page.locator(".roll-tabs a").nth(1)
+    season = tab.text_content()
+    tab.click()
+    expect(page.locator(".roll-tabs a[aria-current]")).to_have_text(season)
     assert page.locator(".roll tbody tr:not(.roll-empty)").count() == 100
+    assert not errors
+
+
+def test_profile_counts_match_its_table(make_page, base):
+    page, errors = make_page()
+    page.goto(base + "#/lookup?q=Bella Grubb")
+    expect(page.locator(".lk-name")).to_have_text("Bella Grubb")
+    rows = page.locator(".rec tbody tr:not(.rec-season)").count()
+    assert f"{rows} results across" in page.text_content("#lk-rec-h + .sub")
+    assert not errors
+
+
+def test_back_from_profile_returns_focus_to_the_link(make_page, base):
+    page, errors = make_page()
+    page.goto(base + "#/rankings")
+    link = page.locator(".roll-nm").nth(7)
+    name = link.text_content()
+    link.click()
+    expect(page.locator(".lk-name")).to_be_visible()
+    page.go_back()
+    expect(page.locator(".roll")).to_be_visible()
+    assert page.evaluate("document.activeElement.textContent") == name
     assert not errors
 
 

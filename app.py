@@ -66,6 +66,7 @@ DEPTH_PTS = {"P": 0, "O": 2, "Q": 4, "S": 7, "F": 12}
 PLACE_BONUS = {1: 12, 2: 8, 3: 6, 4: 4, 5: 3, 6: 2}
 PRELIM_MAX = 3
 BID_BONUS = 3
+LOCAL_WEIGHT = [0.15, 0.45]
 SEASON_MULT = {0: 1.0, 1: 0.9, 2: 0.6, 3: 0.35, 4: 0.2, 5: 0.1, 6: 0.05}
 TOPK, DECAY, SCALE = 6, 0.7, 45
 UNKNOWN_R = 15
@@ -270,7 +271,8 @@ def perf_records(t: dict, event: dict, perfs: list[dict]) -> list[dict]:
 def tier_weight(tier: str, field: int | None) -> float:
     if tier in TIER_WEIGHT:
         return TIER_WEIGHT[tier]
-    return min(0.45, max(0.15, 0.15 + (field or 40) / 200))
+    lo, hi = LOCAL_WEIGHT
+    return min(hi, max(lo, lo + (field or 40) / 200))
 
 
 def perf_points(p: dict, seasons_ago: int) -> float:
@@ -628,13 +630,15 @@ def person_obj(pid: str, g: list[dict]) -> dict:
         top.append({"label": label, "tier": p["tier"], **({"bid": True} if p["bid"] else {})})
         if len(top) == 3:
             break
+    rows = best_per_event(g)
     return {"pid": pid, "name": g[0]["name"], "school": next((s for s in schools if not INDEP.search(name_key(s))), (schools or [""])[0]),
             "schools": schools, "n": n_tourn, "first": g[-1]["date"], "last": g[0]["date"], "rating": round(sc["rating"], 1),
             "tier": sc["tier"], "confidence": 1 if len(g) < 3 else 2 if len(g) < 8 else 3, "badges": badges(g, sc),
             "bids": {season_label(y): n for y, n in sorted(sc["bids"].items(), reverse=True)},
             "stats": {"tournaments": n_tourn, "breaks": sum(p["depth"] != "P" for p in g),
                       "finals": sum(p["depth"] == "F" for p in g), "wins": sum(p["depth"] == "F" and p["place"] == 1 for p in g)},
-            "top": top, "h": [hist_row(p) for p in best_per_event(g)]}
+            "top": top, "h": [hist_row(p) for p in rows],
+            "b": max(range(len(rows)), key=lambda i: perf_points(rows[i], 0))}
 
 
 def build_people(perfs: list[dict]) -> tuple[dict[str, list[dict]], dict[tuple, str]]:
@@ -645,13 +649,14 @@ def build_people(perfs: list[dict]) -> tuple[dict[str, list[dict]], dict[tuple, 
     people: dict[str, list[dict]] = {}
     pid_of: dict[tuple, str] = {}
     for key in sorted(by_key):
-        groups = sorted(cluster(by_key[key]), key=lambda g: (max(p["date"] for p in g), len(g)), reverse=True)
-        people[key] = []
-        for i, g in enumerate(groups):
+        built = []
+        # pids follow each person's first result, which frozen data never changes, so links survive weekly refreshes
+        for i, g in enumerate(sorted(cluster(by_key[key]), key=lambda g: min((p["date"], p["tid"], p["ev"], p["eid"]) for p in g))):
             g.sort(key=lambda p: (p["date"], p["tid"], p["ev"], p["eid"]), reverse=True)
-            people[key].append(person_obj(f"{key}#{i}", g))
+            built.append(person_obj(f"{key}#{i}", g))
             for p in g:
                 pid_of[(p["tid"], p["ev"], p["eid"])] = f"{key}#{i}"
+        people[key] = sorted(built, key=lambda p: (p["last"], p["n"]), reverse=True)
     return people, pid_of
 
 
@@ -691,12 +696,17 @@ def overall_board(people: dict[str, list[dict]]) -> list[dict]:
              "bids": sum(p["bids"].get(s, 0) for s in recent)} for p in ranked]
 
 
-def sample_chamber(perfs: list[dict], tid: int = TOC_TID) -> dict:
+def sample_chamber(perfs: list[dict], people: dict[str, list[dict]], pid_of: dict[tuple, str], tid: int = TOC_TID) -> dict:
     final = [p for p in perfs if p["tid"] == tid and p["depth"] == "F"]
     ev = Counter(p["ev"] for p in final).most_common(1)
     final = sorted((p for p in final if ev and p["ev"] == ev[0][0]), key=lambda p: (p["place"] or 99, p["name"]))
     year = max((p["date"][:4] for p in final), default="")
-    return {"title": f"{year} Tournament of Champions final".strip(), "names": [p["name"] for p in final], "tid": tid}
+    rating = {p["pid"]: p["rating"] for ps in people.values() for p in ps}
+    by_name = {p["name"]: rating[pid_of[(tid, p["ev"], p["eid"])]] for p in final}
+    me = min(by_name, key=lambda n: (by_name[n], n), default=None)
+    strength = chamber_strength([r for n, r in by_name.items() if n != me], advancing(len(final)))
+    return {"title": f"{year} Tournament of Champions final".strip(), "names": [p["name"] for p in final], "tid": tid,
+            "me": me, "strength": round(strength, 1)}
 
 
 def export(perfs: list[dict], out: Path, chambers: dict, index_html: Path = HERE / "index.html", assets: Path = HERE / "assets") -> dict:
@@ -717,12 +727,15 @@ def export(perfs: list[dict], out: Path, chambers: dict, index_html: Path = HERE
     built = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     dump(out / "data" / "rankings.json", {"built_at": built, "overall": overall_board(people), "seasons": season_boards(perfs, people, pid_of)})
     dump(out / "data" / "chambers.json", {**chambers, "thresholds": CHAMBER_THRESHOLDS})
-    dump(out / "data" / "sample.json", sample_chamber(perfs))
+    dump(out / "data" / "sample.json", sample_chamber(perfs, people, pid_of))
     meta = {"version": 1, "built_at": built,
             "seasons": [season_label(y) for y in range(FIRST_SEASON, CURRENT_SEASON + 1)], "current_season": season_label(CURRENT_SEASON),
             "tournaments": len({p["tid"] for p in perfs}), "people": sum(map(len, people.values())), "perfs": len(perfs),
             "shards": SHARDS, "chamber_thresholds": CHAMBER_THRESHOLDS,
             "key_tests": [[raw, name_key(raw)] for raw in KEY_TESTS], "hash_tests": [[k, f"{shard_of(k):02x}"] for k in HASH_TESTS],
+            "scoring": {"weight": TIER_WEIGHT, "depth": DEPTH_PTS, "place": [PLACE_BONUS[i] for i in sorted(PLACE_BONUS)], "bid": BID_BONUS,
+                        "prelim_max": PRELIM_MAX, "season_mult": [SEASON_MULT[i] for i in sorted(SEASON_MULT)], "topk": TOPK, "decay": DECAY,
+                        "scale": SCALE, "local": LOCAL_WEIGHT},
             "files": {"rankings": "data/rankings.json", "chambers": "data/chambers.json", "sample": "data/sample.json"}}
     dump(out / "data" / "meta.json", meta)
     shutil.copyfile(index_html, out / "index.html")
@@ -987,7 +1000,9 @@ def check_cluster() -> None:
     people, pid_of = build_people(apart)
     assert [p["pid"] for p in people["emily lin"]] == ["emily lin#0"] and pid_of[(1, 1, 1)] == "emily lin#0"
     people, pid_of = build_people(lin)
-    assert [p["pid"] for p in people["emily lin"]] == ["emily lin#0", "emily lin#1"] and pid_of[(3, 1, 1)] != pid_of[(3, 1, 2)]
+    assert sorted(p["pid"] for p in people["emily lin"]) == ["emily lin#0", "emily lin#1"] and pid_of[(3, 1, 1)] != pid_of[(3, 1, 2)]
+    split = lambda *extra: {p["school"]: p["pid"] for p in build_people(lin + list(extra))[0]["emily lin"]}
+    assert split() == split(_mp("Emily Lin", "Castilleja School", 5, 1)), "a new result must not move a pid to another person"
 
 
 def check_freeze_and_export() -> None:
@@ -1082,7 +1097,9 @@ def check_v2_export() -> None:
         ch = data("chambers.json")
         assert ch == {"strengths": [12.3, 40.1], "thresholds": CHAMBER_THRESHOLDS, "source": "2 real test chambers"}
         sm = data("sample.json")
-        assert sm == {"title": f"{CURRENT_SEASON} Tournament of Champions final", "names": ["Final 1", "Final 2", "Final 3"], "tid": TOC_TID}, sm
+        assert sm == {"title": f"{CURRENT_SEASON} Tournament of Champions final", "names": ["Final 1", "Final 2", "Final 3"], "tid": TOC_TID,
+                      "me": "Final 3", "strength": round(chamber_strength([people[n][0]["rating"] for n in ("final 1", "final 2")], 3), 1)}, sm
+        assert star_p["h"][star_p["b"]][1] == 1 and data("meta.json")["scoring"]["place"] == [12, 8, 6, 4, 3, 2]
     if CHAMBERS_FILE.exists():
         real = json.loads(CHAMBERS_FILE.read_text())
         st = real["strengths"]

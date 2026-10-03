@@ -132,7 +132,7 @@ function el(tag, attrs, ...kids) {
 }
 
 /* Hash router: #/name?params. Fresh navigations scroll to the top; back/forward restores the old position. */
-const routes = new Map(), scrolls = new Map(), TITLE = document.title;
+const routes = new Map(), scrolls = new Map(), lastHref = new Map(), TITLE = document.title;
 let fresh = false, started = false, shown = null, seq = 0;
 const isRoute = h => h === "" || h === "#" || h.startsWith("#/");
 function parse() {
@@ -163,8 +163,8 @@ async function render() {
   }
   if (mine !== seq) return;
   if (!first) {
-    const h = view.querySelector("h1, h2");
-    if (h) { if (!h.hasAttribute("tabindex")) h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); }
+    const t = !isFresh && view.querySelector(`a[href="${CSS.escape(lastHref.get(shown) || "")}"]`) || view.querySelector("h1, h2");
+    if (t) { if (!t.matches("a") && !t.hasAttribute("tabindex")) t.setAttribute("tabindex", "-1"); t.focus({ preventScroll: true }); }
   }
   scrollTo(0, isFresh ? 0 : scrolls.get(shown) || 0);
 }
@@ -182,7 +182,7 @@ addEventListener("hashchange", render);
 document.addEventListener("click", e => {
   if (e.target.closest?.("a.skip")) { e.preventDefault(); document.getElementById("view").focus(); return; }
   const a = e.target.closest?.("a[href^='#/']");
-  if (a && !e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) fresh = true;
+  if (a && !e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { fresh = true; lastHref.set(shown, a.getAttribute("href")); }
 }, true);
 document.addEventListener("DOMContentLoaded", () => { started = true; render(); });
 

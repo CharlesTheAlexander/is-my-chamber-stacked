@@ -37,7 +37,7 @@ const SOURCE_RO = {
   override: "from the level they picked",
   assumed: "assumed, because we couldn't find them on Tabroom",
 };
-const MAX_SHARE = 40;
+const MAX_SHARE = 40, MAX_LINK = 16000;
 
 let known = null;
 async function loadNames() {
@@ -229,7 +229,7 @@ async function buildReport(st, advIn) {
       threat: null, badges: p?.badges || [], bids: p?.bids || {}, stats: p?.stats || {}, top: p?.top || [],
     };
   });
-  const n = rows.length, adv = advIn >= 1 ? advIn : advancing(n), me = st.me;
+  const n = rows.length, adv = clamp(advIn >= 1 ? advIn : advancing(n), 1, Math.max(1, n - 1)), me = st.me;
   const others = rows.filter(r => r.i !== me).map(r => r.rating);
   const strength = chamberStrength(others, adv);
   const found = rows.filter(r => r.rating != null).length;
@@ -258,12 +258,12 @@ function encodeShare(st, adv) {
   const n = st.entries.map(e => words(e.name).join(" ").slice(0, 80));
   const resolved = new Map((st.report?.competitors || []).map(c => [c.i, c.pid]));
   const p = Object.fromEntries(st.entries.flatMap((e, i) => (e.pid || e.school && resolved.get(i)) ? [[i, e.pid || resolved.get(i)]] : []));
-  const o = { n, m: st.me, a: Number.isInteger(adv) && adv >= 1 && adv < n.length ? adv : null, p };
+  const o = { n, m: st.me, a: adv, p };
   if (st.meRating != null) o.l = st.meRating;
   return b64url(new TextEncoder().encode(JSON.stringify(o)));
 }
 function decodeShare(r) {
-  if (typeof r !== "string" || r.length > 8000 || !/^[A-Za-z0-9_-]+$/.test(r)) return null;
+  if (typeof r !== "string" || r.length > MAX_LINK || !/^[A-Za-z0-9_-]+$/.test(r)) return null;
   let o;
   try {
     const bin = atob(r.replace(/-/g, "+").replace(/_/g, "/"));
@@ -271,7 +271,7 @@ function decodeShare(r) {
   } catch { return null; }
   if (!o || typeof o !== "object" || !Array.isArray(o.n) || o.n.length < 2 || o.n.length > MAX_SHARE) return null;
   const n = o.n.map(x => typeof x === "string" ? words(x).join(" ").slice(0, 80) : "");
-  if (n.some(x => !x || !/\p{L}/u.test(x))) return null;
+  if (n.some(x => !x)) return null;
   const idx = v => Number.isInteger(v) && v >= 0 && v < n.length;
   if (o.m != null && !idx(o.m)) return null;
   if (o.a != null && !(Number.isInteger(o.a) && o.a >= 1 && o.a < n.length)) return null;
@@ -300,6 +300,7 @@ const REPORT_HTML = `
     </div>
     <p class="share-msg" data-r="msg" role="status"></p>
     <div class="board" data-r="board"></div>
+    <p class="note sample-note" data-r="foot" hidden></p>
     <div data-r="dist"></div>
   </section>
   <section class="rsec" aria-labelledby="fried-h">
@@ -311,6 +312,8 @@ const REPORT_HTML = `
     <p class="sub">Everyone we found on Tabroom, most dangerous first.<span class="noprint"> Click a name for their full record.</span></p>
     <div class="ledger" data-r="ledger"></div>
   </section>`;
+
+addEventListener("beforeprint", () => document.querySelectorAll("details.more").forEach(d => { d.open = true; }));
 
 function reportRefs(root, ro) {
   root.innerHTML = REPORT_HTML;
@@ -339,9 +342,12 @@ function renderReport(r, R) {
   R.last = r;
   R.share && (R.share.hidden = true);
   R.msg.textContent = "";
+  R.foot.hidden = true;
   R.board.innerHTML = boardHTML(r, R.ro);
   R.fried.innerHTML = friedHTML(r, R.ro);
+  const more = R.ledger.querySelector("details.more")?.open;
   R.ledger.innerHTML = ledgerHTML(r, R.ro);
+  if (more) R.ledger.querySelector("details.more").open = true;
   CS.chambers().then(ch => { if (R.last === r) R.dist.replaceChildren(distFigure(r.chamber.strength, ch)); }, () => R.dist.replaceChildren());
 }
 
@@ -428,10 +434,15 @@ function friedHTML(r, ro) {
       </fieldset>`}`;
 }
 
+const SHOWN = 5;
 function ledgerHTML(r, ro) {
   const found = r.competitors.filter(x => x.rating != null);
   const myst = r.competitors.filter(x => x.rating == null);
-  return found.map(x => entryHTML(x, ro)).join("") + (myst.length ? mysteryHTML(myst, ro) : "") ||
+  const shown = [], rest = [];
+  found.forEach((x, k) => (k < SHOWN || x.is_me ? shown : rest).push(x));
+  return shown.map(x => entryHTML(x, ro)).join("") +
+    (rest.length ? `<details class="more"><summary>Show the other ${rest.length} competitor${rest.length === 1 ? "" : "s"}</summary>${rest.map(x => entryHTML(x, ro)).join("")}</details>` : "") +
+    (myst.length ? mysteryHTML(myst, ro) : "") ||
     `<p class="note" style="padding:1rem 0">Nobody in this chamber is on Tabroom yet.</p>`;
 }
 
@@ -506,7 +517,7 @@ function mysteryHTML(myst, ro) {
 }
 
 /* Where this chamber sits among real ones: a histogram of chambers.json with the label cut-offs. */
-const BIN = 4;
+const BIN = 2.5;
 function distFigure(s, ch) {
   const xs = (ch?.strengths || []).filter(Number.isFinite);
   if (xs.length < 20) return el("div");
@@ -553,7 +564,7 @@ function distFigure(s, ch) {
         el("span", { class: [`row-${i % 2}`, i === 0 ? "first" : i === regions.length - 1 ? "last" : ""].join(" ").trim(),
                      style: i === 0 ? "left:0" : i === regions.length - 1 ? "right:0" : `left:${pos((g.lo + g.hi) / 2)}` },
           el("i", { class: "light", "data-l": chamberLight(g.label) }), g.label))),
-      cuts.map(t => el("span", { class: "dist-cut", style: `left:${pos(t)}`, "aria-hidden": "true" })),
+      cuts.map(t => el("span", { class: "dist-cut", style: `left:${pos(t)}`, "data-v": t, "aria-hidden": "true" })),
       el("div", { class: "dist-plot" }, bars, tip),
       el("span", { class: "dist-me", style: `left:${pos(s)}`, "aria-hidden": "true" }),
       el("div", { class: "dist-axis", "aria-hidden": "true" }, ticks.map(t => el("span", { style: `left:${pos(t)}` }, t))),
@@ -572,9 +583,19 @@ function distFigure(s, ch) {
 /* Home: static markup only; everything user-supplied is added with textContent or esc(). */
 const HOME_HTML = `
   <section class="hero">
-    <h1 tabindex="-1">Is my chamber stacked?</h1>
-    <p class="lede">Paste your Congress chamber and we'll check everyone's Tabroom record, then tell you how strong the room is and how fried you are.</p>
-    <p class="dataline" id="dataline" aria-live="polite">Loading Tabroom data…</p>
+    <div>
+      <h1 tabindex="-1">Is my chamber stacked?</h1>
+      <p class="lede">Paste your Congress chamber and we'll check everyone's Tabroom record, then tell you how strong the room is and how fried you are.</p>
+      <p class="dataline" id="dataline" aria-live="polite">Loading Tabroom data…</p>
+    </div>
+    <aside class="teaser board" id="teaser" hidden aria-labelledby="teaser-h">
+      <p class="teaser-h" id="teaser-h">Example report: <span id="teaser-title"></span></p>
+      <span class="led led-xl" data-ghost="88" aria-hidden="true"><span id="teaser-n"></span></span>
+      <p class="led-cap"><span class="sr" id="teaser-sr"></span>Chamber strength, out of 100</p>
+      <p class="verdict-label"><span class="light" id="teaser-light"></span><span id="teaser-label"></span></p>
+      <p class="blurb" id="teaser-blurb"></p>
+      <button type="button" class="btn-line" data-sample>See the full report</button>
+    </aside>
   </section>
   <div class="home-grid">
     <form class="bill" id="paste-form">
@@ -586,7 +607,7 @@ const HOME_HTML = `
       <p class="hint" id="paste-hint">Copy the entries from the Tabroom schematic, or type one name per line. Judges and room numbers get skipped.</p>
       <div class="actions">
         <button class="btn" id="roll">Call the roll</button>
-        <button type="button" class="btn-line" id="sample">Try it with the 2026 TOC final</button>
+        <button type="button" class="btn-line" data-sample>Try it with the 2026 TOC final</button>
         <p class="err" id="paste-err" role="alert"></p>
       </div>
     </form>
@@ -666,20 +687,43 @@ async function callRoll() {
 }
 $("#paste-form").onsubmit = e => { e.preventDefault(); callRoll(); };
 
-$("#sample").addEventListener("click", async () => {
-  const btn = $("#sample"), err = $("#paste-err");
+const sampleBtns = [...home.querySelectorAll("[data-sample]")];
+async function trySample() {
+  const err = $("#paste-err"), labels = sampleBtns.map(b => b.textContent);
   err.textContent = "";
-  btn.disabled = true;
+  sampleBtns.forEach(b => { b.disabled = true; b.textContent = "Loading the TOC final…"; });
   try {
     const s = await CS.sample();
     const names = (Array.isArray(s?.names) ? s.names : []).filter(x => typeof x === "string" && x.trim()).slice(0, MAX_SHARE);
     if (names.length < 2) throw new Error("The sample chamber isn't available right now. Paste your own instead.");
     ta.value = names.join("\n");
     syncGutter();
-    if (await callRoll()) await run();
+    if (!await callRoll()) return;
+    const me = S.entries.findIndex(e => e.name === s.me);
+    if (me >= 0) { S.me = me; renderConfirm(); }
+    if (await run() && me >= 0) {
+      R.foot.textContent = `Shown as ${s.me}, the lowest-rated member. Pick yourself above.`;
+      R.foot.hidden = false;
+    }
   } catch (x) { err.textContent = x.message; }
-  finally { btn.disabled = false; }
-});
+  finally { sampleBtns.forEach((b, i) => { b.disabled = false; b.textContent = labels[i]; }); }
+}
+for (const b of sampleBtns) {
+  b.addEventListener("click", trySample);
+  b.addEventListener("pointerenter", () => loadNames().catch(() => {}), { once: true });
+}
+
+Promise.all([CS.sample(), CS.meta()]).then(([s, m]) => {
+  if (!(s?.strength >= 0) || !m.chamber_thresholds) return;
+  const label = chamberLabel(s.strength, m.chamber_thresholds);
+  $("#teaser-title").textContent = s.title;
+  $("#teaser-n").textContent = round(s.strength);
+  $("#teaser-sr").textContent = `Strength ${round(s.strength)} `;
+  $("#teaser-light").dataset.l = chamberLight(label);
+  $("#teaser-label").textContent = label;
+  $("#teaser-blurb").textContent = CHAMBER_BLURB[label];
+  $("#teaser").hidden = false;
+}, () => {});
 
 /* Confirm step */
 function pickChamber(ci) {
@@ -803,6 +847,7 @@ async function run() {
   $("#run").disabled = false;
   $("#run").textContent = "Run the numbers";
   if (ok) { $("#rate-h").focus(); $("#rate-h").scrollIntoView({ block: "start" }); }
+  return ok;
 }
 
 let seq = 0;
@@ -813,6 +858,7 @@ async function runReport(focusKey) {
     if (mine !== seq) return false;
     $("#run-err").textContent = "";
     S.report = r;
+    if (+$("#adv").value !== r.chamber.adv) $("#adv").value = r.chamber.adv;
     const k = focusKey || document.activeElement?.dataset?.k;
     renderReport(r, R);
     if (k) document.querySelector(`[data-k="${CSS.escape(k)}"]`)?.focus();
@@ -835,8 +881,9 @@ function setPid(i, pid, name) {
 async function share() {
   const url = $("#share-url");
   if (S.entries.length > MAX_SHARE) { R.msg.textContent = `Share links hold up to ${MAX_SHARE} names. Remove a few and try again.`; return; }
-  const adv = Math.round(+$("#adv").value);
-  url.value = `${location.href.split("#")[0]}#/report?r=${encodeShare(S, S.advTouched ? adv : null)}`;
+  const code = encodeShare(S, S.advTouched ? S.report.chamber.adv : null);
+  if (code.length > MAX_LINK) { R.msg.textContent = "This chamber is too big for a share link. Remove a few names and try again."; return; }
+  url.value = `${location.href.split("#")[0]}#/report?r=${code}`;
   R.share.hidden = false;
   await copy(url);
 }

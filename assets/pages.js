@@ -20,22 +20,12 @@ const ord = n => `${n}${n % 100 > 10 && n % 100 < 14 ? "th" : ["th", "st", "nd",
 const light = tier => E("span", { class: "light", "data-l": CS.tierLight(tier), "aria-hidden": "true" });
 let seq = 0;
 
-/* The scoring constants, mirrored from app.py (TIER_WEIGHT, DEPTH_PTS, PLACE_BONUS, BID_BONUS, SEASON_MULT, TOPK, DECAY, SCALE). */
-const WEIGHT = { TOC: 3, NSDA: 2.5, NCFL: 2, T4: 2, T3: 1.6, T2: 1.2, T1: 0.9 };
-const DEPTH_PTS = { P: 0, O: 2, Q: 4, S: 7, F: 12 };
-const PLACE_BONUS = [0, 12, 8, 6, 4, 3, 2];
-const BID_BONUS = 3, PRELIM_MAX = 3, TOPK = 6, DECAY = 0.7, SCALE = 45;
-const RECENCY = [1, 0.9, 0.6, 0.35, 0.2, 0.1, 0.05];
-const LOCAL = [0.15, 0.45];
-const localWeight = field => Math.min(LOCAL[1], Math.max(LOCAL[0], 0.15 + (field || 40) / 200));
-const worth = r => (DEPTH_PTS[r[4]] + (r[4] === "F" ? PLACE_BONUS[r[5]] || 0 : 0)) * (WEIGHT[r[3]] ?? localWeight(r[7])) + (r[6] ? BID_BONUS : 0);
-
 /* h row: [date, tid, tournament, tier, depth, place, bid, field, season] */
 const DEPTH = { P: "Prelims", O: "Octos", Q: "Quarters", S: "Semis", F: "Finals" };
 const LEVEL = { TOC: "Tournament of Champions", NSDA: "NSDA Nationals", NCFL: "NCFL Grand Nationals", T4: "Tier 4 bid tournament",
   T3: "Tier 3 bid tournament", T2: "Tier 2 bid tournament", T1: "Tier 1 bid tournament", L: "Local tournament" };
 const LEVEL_SHORT = { TOC: "TOC", NSDA: "Nationals", NCFL: "NCFL", T4: "Bid, tier 4", T3: "Bid, tier 3", T2: "Bid, tier 2", T1: "Bid, tier 1", L: "Local" };
-const kind = t => t === "L" ? "loc" : t in WEIGHT && !/^T\d$/.test(t) ? "nat" : "bid";
+const kind = t => t === "L" ? "loc" : ["TOC", "NSDA", "NCFL"].includes(t) ? "nat" : "bid";
 const resultWord = r => r[4] === "F" && r[5] ? ord(r[5]) : DEPTH[r[4]] || r[4];
 
 /* ---------------------------------------------------------------- charts (shared by Look up and How it works) */
@@ -100,9 +90,8 @@ const KEY_SHAPES = {
 };
 const keyItem = (shape, text) => E("li", {}, S("svg", { width: 18, height: 18, viewBox: "0 0 18 18", "aria-hidden": "true" }, KEY_SHAPES[shape]()), text);
 
-function timeline(fig, h) {
+function timeline(fig, h, best) {
   const st = { pts: [], w: 0 };
-  const best = h.reduce((b, r, i) => worth(r) > worth(h[b]) ? i : b, 0);
   const hide = wire(fig, st, i => {
     const r = h[i];
     return [
@@ -309,11 +298,11 @@ function profile(view, p) {
   if (h.length) {
     const kinds = new Set(h.map(x => kind(x[3])));
     const fig = E("figure", { class: "ch", tabindex: "0", role: "group",
-      "aria-label": `Results over time, ${plural(h.length, "tournament")}. Use the arrow keys to step through them. Every result is also in the table below.` });
-    timeline(fig, h);
+      "aria-label": `Results over time, ${plural(h.length, "result")}. Use the arrow keys to step through them. Every result is also in the table below.` });
+    timeline(fig, h, p.b ?? 0);
     body.push(E("section", { class: "lk-sec", "aria-labelledby": "lk-chart-h" },
       E("h2", { id: "lk-chart-h" }, "Results over time"),
-      E("p", { class: "sub" }, "One mark per tournament, placed by date and by how far they got. The best result is labeled."),
+      E("p", { class: "sub" }, "One mark per result, placed by date and by how far they got. The best result is labeled."),
       E("ul", { class: "ch-key", "aria-label": "Key" },
         kinds.has("nat") ? keyItem("nat", "TOC, Nationals or NCFL") : null,
         kinds.has("bid") ? keyItem("bid", "Bid tournament") : null,
@@ -325,7 +314,7 @@ function profile(view, p) {
     for (const x of h) groups.set(x[8], [...groups.get(x[8]) || [], x]);
     body.push(E("section", { class: "lk-sec", "aria-labelledby": "lk-rec-h" },
       E("h2", { id: "lk-rec-h" }, "Every result"),
-      E("p", { class: "sub" }, `${plural(h.length, "tournament")} across ${plural(groups.size, "season")}, newest first.`),
+      E("p", { class: "sub" }, `${plural(h.length, "result")} across ${plural(groups.size, "season")}, newest first.`),
       E("div", { class: "tbl-wrap" }, E("table", { class: "rec" },
         E("caption", { class: "sr" }, `Every varsity Congress result for ${p.name}, by season`),
         E("thead", {}, E("tr", {},
@@ -333,7 +322,7 @@ function profile(view, p) {
           E("th", { scope: "col", class: "wide" }, "Level"), E("th", { scope: "col", class: "is-num wide" }, "Entries"))),
         [...groups].map(([season, rows]) => E("tbody", {},
           E("tr", { class: "rec-season" }, E("th", { colspan: "5", scope: "colgroup" }, season, " ",
-            E("span", {}, [plural(rows.length, "tournament"), plural(rows.filter(x => x[4] !== "P").length, "break"),
+            E("span", {}, [plural(rows.length, "result"), plural(rows.filter(x => x[4] !== "P").length, "break"),
               plural(rows.filter(x => x[6]).length, "bid")].join(", ")))),
           rows.map(x => E("tr", x[4] === "F" ? { class: "is-final" } : {},
             E("td", { class: "rec-date" }, fmtDate(x[0], { month: "short", day: "numeric" })),
@@ -500,7 +489,9 @@ CS.route("about", async view => {
   view.replaceChildren(E("div", { class: "pg" }, E("h1", { class: "page-h" }, "How it works"), E("p", { class: "pg-status" }, "Loading…")));
   const [m, c] = await Promise.allSettled([CS.meta(), CS.chambers()]);
   if (id !== seq) return;
-  const meta = m.value, ch = c.value, th = ch?.thresholds || meta?.chamber_thresholds;
+  if (m.status === "rejected") return view.replaceChildren(E("div", { class: "pg" }, E("h1", { class: "page-h" }, "How it works"), E("p", { class: "err", role: "alert" }, m.reason.message)));
+  const meta = m.value, ch = c.value, th = ch?.thresholds || meta.chamber_thresholds;
+  const { weight: WEIGHT, depth: DEPTH_PTS, place: PLACE_BONUS, bid: BID_BONUS, prelim_max: PRELIM_MAX, season_mult: RECENCY, topk: TOPK, decay: DECAY, scale: SCALE, local: LOCAL } = meta.scoring;
   const spot = (n, label) => E("div", {}, E("dt", {}, label), E("dd", {}, n));
 
   const cal = [];
@@ -535,11 +526,11 @@ CS.route("about", async view => {
 
     sec(1, "data", "Where the data comes from",
       E("p", {}, "Everything comes from Tabroom's public results. Every Monday we read every tournament on Tabroom that has published results, from every circuit, back to the 2020-21 season. Only varsity Congress counts: middle school, novice, JV and round-robin events are skipped."),
-      meta ? E("dl", { class: "figs" },
+      E("dl", { class: "figs" },
         spot(meta.tournaments.toLocaleString("en-US"), "Tournaments"),
         spot(meta.people.toLocaleString("en-US"), "Competitors"),
         spot(meta.perfs.toLocaleString("en-US"), "Results"),
-        spot(new Date(meta.built_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }), "Last refresh")) : null,
+        spot(new Date(meta.built_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }), "Last refresh")),
       E("p", {}, "A result is one competitor at one tournament: how far they got, their place if they made finals, whether they earned a TOC bid, and for prelims, how high they ranked in their chamber. Ballots and speaker points aren't used.")),
 
     sec(2, "score", "How one result is scored",
@@ -547,7 +538,7 @@ CS.route("about", async view => {
       E("p", { class: "ab-formula" }, "points = (round reached + finals place) × tournament weight + bid bonus, all × how long ago"),
       E("div", { class: "ab-grid" },
         tbl("Round reached", ["Round", "Points"], [["Prelims", `0 to ${PRELIM_MAX}`], ...[..."OQSF"].map(d => [DEPTH[d], String(DEPTH_PTS[d])])]),
-        tbl("Finals place", ["Place", "Bonus"], PLACE_BONUS.slice(1).map((b, i) => [ord(i + 1), `+${b}`])),
+        tbl("Finals place", ["Place", "Bonus"], PLACE_BONUS.map((b, i) => [ord(i + 1), `+${b}`])),
         tbl("Tournament weight", ["Tournament", "Weight"], [
           ...Object.entries(WEIGHT).map(([t, w]) => [LEVEL_SHORT[t], x1(w)]),
           ["Local", `${x1(LOCAL[0])} to ${x1(LOCAL[1])}`]]),
@@ -556,7 +547,7 @@ CS.route("about", async view => {
       E("ul", { class: "ab-ex" },
         E("li", {}, E("strong", {}, "Winning the TOC this season: "), `(12 + 12) × 3.0 = ${(12 + 12) * 3} points.`),
         E("li", {}, E("strong", {}, "Semis and a bid at a tier 3 tournament last season: "), `(7 × 1.6 + 3) × 0.9 = ${((7 * 1.6 + 3) * 0.9).toFixed(1)} points.`),
-        E("li", {}, E("strong", {}, "Topping your prelim room at a 40-entry local this season: "), `3 × ${localWeight(40).toFixed(2)} = ${(3 * localWeight(40)).toFixed(2)} points.`))),
+        E("li", {}, E("strong", {}, "Topping your prelim room at a 40-entry local this season: "), `3 × ${(LOCAL[0] + 40 / 200).toFixed(2)} = ${(3 * (LOCAL[0] + 40 / 200)).toFixed(2)} points.`))),
 
     sec(3, "rating", "From results to a rating",
       E("p", {}, `Your ${TOPK} best results count. The best counts in full and each one after it counts a little less: ${Array.from({ length: TOPK }, (_, i) => `${Math.round(100 * DECAY ** i)}%`).join(", ")}. Showing up more doesn't raise your rating; doing well does.`),
