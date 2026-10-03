@@ -29,6 +29,7 @@ jobs:
           path: cache
           key: tabroom-cache-${{ github.run_id }}
           restore-keys: tabroom-cache-
+      - run: python app.py --selfcheck
       - run: python app.py --crawl
       - run: python app.py --freeze
       - name: Commit newly frozen seasons
@@ -41,6 +42,11 @@ jobs:
             git push
           fi
       - run: python app.py --export site
+      - name: Install test tools
+        run: |
+          pip install pytest playwright
+          playwright install --with-deps chromium
+      - run: python -m pytest -q
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site

@@ -3,8 +3,8 @@
 
     python3 app.py --crawl          fetch every non-frozen season into cache/ (resumable, polite)
     python3 app.py --freeze         write perfs/{season}.json.gz for completed seasons (never overwrites; delete one to refreeze)
-    python3 app.py --export site    build people from frozen + cached seasons, write site/index.html and site/data/*
-    python3 app.py --calibrate      print the chamber-strength distribution behind CHAMBER_THRESHOLDS
+    python3 app.py --export site    build people from frozen + cached seasons, write site/index.html, site/assets/ and site/data/*
+    python3 app.py --calibrate      print the chamber-strength distribution behind CHAMBER_THRESHOLDS, write perfs/chambers.json
     python3 app.py --selfcheck      offline asserts
 """
 import argparse
@@ -32,15 +32,19 @@ from typing import Any, Callable
 HERE = Path(__file__).resolve().parent
 CACHE = HERE / "cache"
 PERFS_DIR = HERE / "perfs"
+CHAMBERS_FILE = PERFS_DIR / "chambers.json"
 BASE = "https://api.tabroom.com/v1/rest"
 USER_AGENT = "IsMyChamberStacked/0.1 (personal Congress-prep tool; low volume)"
 MIN_INTERVAL, TIMEOUT = 0.25, 30
 CIRCUIT = 228
 FIRST_SEASON = 2020
 EXTRA_TOURNS = [37602, 39322]
-OVERRIDES = {36156: "TOC", 37602: "NSDA", 39322: "NCFL"}
-SHORT = {36156: "TOC", 37602: "NSDA Nats", 39322: "NCFL"}
-SHORT_DROP = {"at", "annual", "national", "speech", "and", "&", "debate", "tournament", "invitational", "for", "high", "schools", "the"}
+TOC_TID = 36156
+OVERRIDES = {TOC_TID: "TOC", 37602: "NSDA", 39322: "NCFL"}
+SHORT = {TOC_TID: "TOC", 37602: "NSDA Nats", 39322: "NCFL"}
+SHORT_DROP = {"annual", "national", "speech", "debate", "tournament", "invitational", "high", "school", "schools", "hs", "sr", "jr", "e"}
+CONNECTORS = {"of", "at", "for", "in", "to", "the", "a", "an", "and", "&", "v", "vs", "de", "la", "on", "by", "with"}
+YEAR = re.compile(r"(?:19|20)\d\d|'\d\d|\d+(?:st|nd|rd|th)", re.I)
 NAME_TIERS = [
     ("TOC", re.compile(r"^(?:\d{4} )?(?:\d+(?:st|nd|rd|th) )?(?:annual )?tournament of champions(?: \d{4})?$")),
     ("NSDA", re.compile(r"^(?:\d{4} )?(?:nsda national tournament|national speech (?:and|&) debate tournament|nsda nationals?)(?: \d{4})?$")),
@@ -227,15 +231,23 @@ def extract(tier_forced: str | None, plan_rows: list[tuple[str, str | None, dict
 
 
 def short_name(tid: int, name: str) -> str:
+    # ponytail: word-level heuristic, a few odd names stay odd; hand-map them in SHORT if one matters
     if tid in SHORT:
         return SHORT[tid]
     nat = {"TOC": "TOC", "NSDA": "NSDA Nats", "NCFL": "NCFL"}.get(tier_override({"id": tid, "name": name}) or "")
     if nat:
         return nat
-    words = [w for w in name.split() if w.lower() not in SHORT_DROP]
-    while words and re.fullmatch(r"\d+(st|nd|rd|th)", words[0], re.I):
+    words = [w for w in re.sub(r"\bspeech\s*(?:and|&)\s*debate\b", " ", name, flags=re.I).split() if not YEAR.fullmatch(w)]
+    if len(words) > 2 and words[0].lower() in ("the", "a", "an") and words[1].lower() not in ("and", "&"):
         words.pop(0)
-    return " ".join(words[:3]) or name
+    core = [w for w in words if w.lower() not in SHORT_DROP]
+    if not core or core[0].lower() in CONNECTORS:
+        core = words
+    keep = core if len(core) <= 4 and len(" ".join(core)) <= 26 else core[:3]
+    cut = len(keep) < len(core)
+    while len(keep) > 1 and (keep[-1].lower() in CONNECTORS or cut and len(keep[-1]) == 1 and keep[-1].isalpha() and keep[-2].lower() not in CONNECTORS):
+        keep.pop()
+    return " ".join(keep).strip(" ,-:;&/(") or name
 
 
 def season_of(date: str) -> int:
@@ -248,9 +260,9 @@ def season_label(y: int) -> str:
 
 
 def perf_records(t: dict, event: dict, perfs: list[dict]) -> list[dict]:
-    date, tname = t["start"][:10], short_name(t["id"], t.get("name") or "")
-    return [{**p, "key": name_key(p["name"]), "tid": t["id"], "ev": event["id"], "tourn": tname, "date": date,
-             "season": season_of(date)} for p in perfs if p["name"]]
+    date, tname = t["start"][:10], t.get("name") or ""
+    return [{**p, "key": name_key(p["name"]), "tid": t["id"], "ev": event["id"], "tname": tname, "tourn": short_name(t["id"], tname),
+             "date": date, "season": season_of(date)} for p in perfs if p["name"]]
 
 
 # ---------------------------------------------------------------- scoring
@@ -505,7 +517,7 @@ def frozen_path(y: int, d: Path) -> Path:
 
 
 def write_frozen(y: int, perfs: list[dict], d: Path) -> Path:
-    tourns = {str(p["tid"]): [p["tourn"], p["date"]] for p in perfs}
+    tourns = {str(p["tid"]): [p["tname"], p["date"]] for p in perfs}
     rows = sorted([p["tid"], p["ev"], p["eid"], p["name"], p["school"], p["depth"], p["place"], int(p["bid"]),
                    None if p["pct"] is None else round(p["pct"], 4), p["field"], p["tier"]] for p in perfs)
     body = json.dumps({"season": y, "tourns": tourns, "rows": rows}, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
@@ -519,10 +531,10 @@ def read_frozen(f: Path) -> list[dict]:
     data = json.loads(gzip.decompress(f.read_bytes()))
     out = []
     for tid, ev, eid, name, school, depth, place, bid, pct, field, tier in data["rows"]:
-        tourn, date = data["tourns"][str(tid)]
+        tname, date = data["tourns"][str(tid)]
         out.append({"eid": eid, "name": name, "school": school, "depth": depth, "place": place, "bid": bool(bid), "pct": pct,
-                    "tier": tier, "field": field, "key": name_key(name), "tid": tid, "ev": ev, "tourn": tourn, "date": date,
-                    "season": data["season"]})
+                    "tier": tier, "field": field, "key": name_key(name), "tid": tid, "ev": ev, "tname": tname,
+                    "tourn": short_name(tid, tname), "date": date, "season": data["season"]})
     return out
 
 
@@ -588,23 +600,41 @@ def cluster(perfs: list[dict]) -> list[list[dict]]:
     return out
 
 
+def best_per_event(g: list[dict]) -> list[dict]:
+    best: dict[tuple, dict] = {}
+    for p in g:
+        k = (p["tid"], p["ev"])
+        if k not in best or perf_points(p, 0) > perf_points(best[k], 0):
+            best[k] = p
+    return list(best.values())
+
+
+def hist_row(p: dict) -> list:
+    return [p["date"], p["tid"], p["tourn"], "L" if p["tier"] == "local" else p["tier"], p["depth"],
+            p["place"] if p["depth"] == "F" else None, int(p["bid"]), p["field"], season_label(p["season"])]
+
+
 def person_obj(pid: str, g: list[dict]) -> dict:
     sc = score_person(g)
     schools = list(dict.fromkeys(p["school"] for p in g if p["school"]))
     n_tourn = len({p["tid"] for p in g})
-    top = []
-    for _, p in sc["ranked"][:3]:
-        t = {"label": result_label(p), "tier": p["tier"]}
-        if p["bid"]:
-            t["bid"] = True
-        top.append(t)
+    top, seen = [], set()
+    for _, p in sc["ranked"]:
+        label = result_label(p)
+        venue = label.split(" @ ", 1)[1]
+        if p["tid"] in seen or venue in seen:
+            continue
+        seen |= {p["tid"], venue}
+        top.append({"label": label, "tier": p["tier"], **({"bid": True} if p["bid"] else {})})
+        if len(top) == 3:
+            break
     return {"pid": pid, "name": g[0]["name"], "school": next((s for s in schools if not INDEP.search(name_key(s))), (schools or [""])[0]),
             "schools": schools, "n": n_tourn, "first": g[-1]["date"], "last": g[0]["date"], "rating": round(sc["rating"], 1),
             "tier": sc["tier"], "confidence": 1 if len(g) < 3 else 2 if len(g) < 8 else 3, "badges": badges(g, sc),
             "bids": {season_label(y): n for y, n in sorted(sc["bids"].items(), reverse=True)},
             "stats": {"tournaments": n_tourn, "breaks": sum(p["depth"] != "P" for p in g),
                       "finals": sum(p["depth"] == "F" for p in g), "wins": sum(p["depth"] == "F" and p["place"] == 1 for p in g)},
-            "top": top}
+            "top": top, "h": [hist_row(p) for p in best_per_event(g)]}
 
 
 def build_people(perfs: list[dict]) -> tuple[dict[str, list[dict]], dict[tuple, str]]:
@@ -631,8 +661,46 @@ def dump(path: Path, obj: Any) -> None:
     path.write_bytes(json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8", "replace"))
 
 
-def export(perfs: list[dict], out: Path, index_html: Path = HERE / "index.html") -> dict:
-    people, _ = build_people(perfs)
+def season_boards(perfs: list[dict], people: dict[str, list[dict]], pid_of: dict[tuple, str]) -> dict[str, list[dict]]:
+    """Top 100 per season by raw season points (perf_points without the recency multiplier)."""
+    by_pid = {p["pid"]: p for ps in people.values() for p in ps}
+    best: dict[tuple, dict] = {}
+    for p in perfs:
+        k = (pid_of[(p["tid"], p["ev"], p["eid"])], p["tid"], p["ev"])
+        if k not in best or perf_points(p, 0) > perf_points(best[k], 0):
+            best[k] = p
+    out = {}
+    for y in (CURRENT_SEASON, CURRENT_SEASON - 1):
+        pts: Counter = Counter()
+        top: dict[str, dict] = {}
+        for (pid, _, _), p in best.items():
+            if p["season"] == y:
+                pts[pid] += perf_points(p, 0)
+                if pid not in top or perf_points(p, 0) > perf_points(top[pid], 0):
+                    top[pid] = p
+        rows = sorted(((round(v, 1), pid) for pid, v in pts.items() if v > 0), key=lambda r: (-r[0], r[1]))[:100]
+        out[season_label(y)] = [{"pid": pid, "name": by_pid[pid]["name"], "school": by_pid[pid]["school"], "points": v,
+                                 "best": result_label(top[pid]), "tier": by_pid[pid]["tier"]} for v, pid in rows]
+    return out
+
+
+def overall_board(people: dict[str, list[dict]]) -> list[dict]:
+    recent = (season_label(CURRENT_SEASON), season_label(CURRENT_SEASON - 1))
+    ranked = sorted((p for ps in people.values() for p in ps), key=lambda p: (-p["rating"], -p["n"], p["pid"]))[:250]
+    return [{"pid": p["pid"], "name": p["name"], "school": p["school"], "rating": p["rating"], "tier": p["tier"], "n": p["n"],
+             "bids": sum(p["bids"].get(s, 0) for s in recent)} for p in ranked]
+
+
+def sample_chamber(perfs: list[dict], tid: int = TOC_TID) -> dict:
+    final = [p for p in perfs if p["tid"] == tid and p["depth"] == "F"]
+    ev = Counter(p["ev"] for p in final).most_common(1)
+    final = sorted((p for p in final if ev and p["ev"] == ev[0][0]), key=lambda p: (p["place"] or 99, p["name"]))
+    year = max((p["date"][:4] for p in final), default="")
+    return {"title": f"{year} Tournament of Champions final".strip(), "names": [p["name"] for p in final], "tid": tid}
+
+
+def export(perfs: list[dict], out: Path, chambers: dict, index_html: Path = HERE / "index.html", assets: Path = HERE / "assets") -> dict:
+    people, pid_of = build_people(perfs)
     shards: list[dict] = [{"n": {}, "fl": {}} for _ in range(SHARDS)]
     for key, ps in people.items():
         shards[shard_of(key)]["n"][key] = ps
@@ -641,17 +709,27 @@ def export(perfs: list[dict], out: Path, index_html: Path = HERE / "index.html")
             fl = f"{toks[0]} {toks[-1]}"
             shards[shard_of(fl)]["fl"].setdefault(fl, []).append(key)
     shutil.rmtree(out / "data", ignore_errors=True)
+    shutil.rmtree(out / "assets", ignore_errors=True)
     (out / "data" / "p").mkdir(parents=True)
     for i, s in enumerate(shards):
         dump(out / "data" / "p" / f"{i:02x}.json", s)
     dump(out / "data" / "names.json", [[k, ps[0]["name"]] for k, ps in people.items()])
-    meta = {"version": 1, "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+    built = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    dump(out / "data" / "rankings.json", {"built_at": built, "overall": overall_board(people), "seasons": season_boards(perfs, people, pid_of)})
+    dump(out / "data" / "chambers.json", {**chambers, "thresholds": CHAMBER_THRESHOLDS})
+    dump(out / "data" / "sample.json", sample_chamber(perfs))
+    meta = {"version": 1, "built_at": built,
             "seasons": [season_label(y) for y in range(FIRST_SEASON, CURRENT_SEASON + 1)], "current_season": season_label(CURRENT_SEASON),
             "tournaments": len({p["tid"] for p in perfs}), "people": sum(map(len, people.values())), "perfs": len(perfs),
             "shards": SHARDS, "chamber_thresholds": CHAMBER_THRESHOLDS,
-            "key_tests": [[raw, name_key(raw)] for raw in KEY_TESTS], "hash_tests": [[k, f"{shard_of(k):02x}"] for k in HASH_TESTS]}
+            "key_tests": [[raw, name_key(raw)] for raw in KEY_TESTS], "hash_tests": [[k, f"{shard_of(k):02x}"] for k in HASH_TESTS],
+            "files": {"rankings": "data/rankings.json", "chambers": "data/chambers.json", "sample": "data/sample.json"}}
     dump(out / "data" / "meta.json", meta)
     shutil.copyfile(index_html, out / "index.html")
+    if assets.is_dir():
+        shutil.copytree(assets, out / "assets")
+    else:
+        (out / "assets").mkdir()
     return meta
 
 
@@ -702,6 +780,15 @@ def calibrate(perfs: list[dict]) -> None:
     print(f"{len(strengths)} chambers, {rated}/{total} members matched to a rating, min {min(strengths):.1f} max {max(strengths):.1f} mean {statistics.fmean(strengths):.1f}")
     print("percentile: " + "  ".join(f"p{q}={cuts[q - 1]:.1f}" for q in (5, 10, 20, 30, 45, 50, 60, 70, 80, 90, 95, 99)))
     print(f"CHAMBER_THRESHOLDS = {[round(cuts[q - 1], 1) for q in (20, 45, 70, 90)]}")
+    dump(CHAMBERS_FILE, {"strengths": sorted(round(x, 1) for x in strengths), "source": f"{len(strengths)} real {season_label(CAL_SEASON)} national-circuit prelim chambers"})
+    print(f"wrote {CHAMBERS_FILE.relative_to(HERE)} (commit it: --export reads it, CI has no raw cache for {season_label(CAL_SEASON)})")
+
+
+def load_chambers() -> dict:
+    try:
+        return json.loads(CHAMBERS_FILE.read_text())
+    except (OSError, ValueError):
+        sys.exit(f"{CHAMBERS_FILE.name} missing; run --calibrate once with the {season_label(CAL_SEASON)} cache/ and commit it")
 
 
 # ---------------------------------------------------------------- selfcheck
@@ -782,6 +869,21 @@ def check_extraction() -> None:
     assert (p["c"]["depth"], p["e"]["depth"]) == ("S", "P")
     assert short_name(1, "54th Annual Harvard National Speech and Debate Tournament") == "Harvard"
     assert short_name(1, "Barkley Forum for High Schools") == "Barkley Forum" and short_name(36156, "x") == "TOC"
+    assert short_name(2, "Tournament of Champions Digital Series") == "Tournament of Champions"
+    cases = {"Star Valley Tournament of the Brave": "Star Valley", "Digital Speech and Debate e Championship": "Digital Championship",
+             "Tournament of Lights": "Tournament of Lights", "LHSSL State Tournament of Champions": "LHSSL State of Champions",
+             "Dallastown End of Summer Practice Rounds": "Dallastown End", "I Have a Dream Tournament": "I Have a Dream",
+             "Lewis and Clark Invitational": "Lewis and Clark", "2026 University of Houston Cougar Classic": "University of Houston",
+             "UNT John S Gossett Memorial High School Tournament": "UNT John", "A Day of Honor in Othello": "Day of Honor",
+             "PCFL 1 at La Salle": "PCFL 1", "Lakeview CFL of Erie": "Lakeview CFL of Erie", "TOC Digital Series": "TOC Digital Series",
+             "2021 Tournament of Champions": "TOC", "NSDA Nationals": "NSDA Nats", "NCFL Grand Nationals": "NCFL"}
+    for name, want in cases.items():
+        assert short_name(1, name) == want, (name, short_name(1, name))
+    frozen = sorted(PERFS_DIR.glob("*.json.gz"))
+    for f in frozen:
+        for tname, _ in json.loads(gzip.decompress(f.read_bytes()))["tourns"].values():
+            sn = short_name(1, tname).split()
+            assert sn and sn[-1].lower() not in CONNECTORS and (sn[0].lower() not in CONNECTORS or len(sn) > 1) and len(" ".join(sn)) <= 40, (tname, sn)
 
     tiers = {"53rd Annual Tournament of Champions": "TOC", "2021 Tournament of Champions": "TOC", "National Speech and Debate Tournament": "NSDA",
              "2021 NSDA Nationals": "NSDA", "NCFL Grand Nationals": "NCFL", "Harvard National Speech and Debate Tournament": None,
@@ -862,7 +964,7 @@ def check_keys() -> None:
 
 
 def _mp(name: str, school: str, tid: int, eid: int, ev: int = 1, **kw: Any) -> dict:
-    return {"key": name_key(name), "name": name, "school": school, "tid": tid, "ev": ev, "eid": eid, "tourn": f"T{tid}",
+    return {"key": name_key(name), "name": name, "school": school, "tid": tid, "ev": ev, "eid": eid, "tname": f"T{tid}", "tourn": f"T{tid}",
             "date": f"2026-0{tid}-10", "season": 2025, "tier": "T2", "field": 30, "depth": "Q", "place": None, "bid": False, "pct": 0.5, **kw}
 
 
@@ -902,9 +1004,11 @@ def check_freeze_and_export() -> None:
         assert len(load_perfs([2025], d / "perfs")) == 4
 
         out = d / "site"
-        meta = export(read_frozen(f), out)
+        meta = export(read_frozen(f), out, {"strengths": [10.0, 20.0, 30.0], "source": "3 real test chambers"})
         assert json.loads((out / "data" / "meta.json").read_text()) == meta
         assert meta["version"] == 1 and meta["shards"] == 256 and meta["people"] == 3 and meta["perfs"] == 4 and meta["tournaments"] == 3
+        assert meta["files"] == {"rankings": "data/rankings.json", "chambers": "data/chambers.json", "sample": "data/sample.json"}
+        assert all((out / meta["files"][k]).is_file() for k in meta["files"]) and (out / "assets").is_dir()
         assert len(meta["chamber_thresholds"]) == 4 and meta["chamber_thresholds"] == sorted(meta["chamber_thresholds"])
         assert all(name_key(raw) == k for raw, k in meta["key_tests"]) and len(meta["key_tests"]) >= 12 and len(meta["hash_tests"]) >= 6
         assert meta["seasons"][0] == "2020-21" and meta["current_season"] == season_label(CURRENT_SEASON)
@@ -926,8 +1030,69 @@ def check_freeze_and_export() -> None:
         assert (out / "index.html").read_bytes() == (HERE / "index.html").read_bytes()
 
 
+def check_v2_export() -> None:
+    ly = CURRENT_SEASON - 1
+    day = lambda m: f"{CURRENT_SEASON}-0{m}-10"
+    mk = lambda name, school, tid, eid, **kw: _mp(name, school, tid, eid, season=ly, date=day(tid), **kw)
+    toc = [mk(f"Final {i}", "Sch", TOC_TID, i, tier="TOC", depth="F", place=i, field=170, tname="Tournament of Champions", tourn="TOC")
+           for i in (3, 1, 2)] + [mk("Final 1", "Sch", TOC_TID, 9, ev=2, tier="TOC", depth="Q", tname="Tournament of Champions", tourn="TOC")]
+    star = [mk("Star Player", "Sch", 1, 1, tourn="Swing", depth="F", place=1, bid=True, tier="T3", field=100),
+            mk("Star Player", "Sch", 1, 2, tourn="Swing", depth="S", tier="T3", field=100),
+            mk("Star Player", "Sch", 2, 1, tourn="Swing", depth="F", place=2, tier="T3", field=100),
+            mk("Star Player", "Sch", 3, 1, tourn="Local Cup", depth="F", place=4, tier="local", field=20),
+            mk("Star Player", "Sch", 4, 1, tourn="Swing 2", depth="O", tier="T2", field=50),
+            {**mk("Star Player", "Sch", 5, 1, tourn="Old", depth="F", place=1, tier="T3", field=100), "date": f"{ly}-02-10", "season": ly - 1}]
+    weak = [mk("Weak Kid", "Sch", 1, 7, depth="P", pct=0.5, field=100)]
+    perfs = toc + star + weak
+    chambers = {"strengths": [12.3, 40.1], "source": "2 real test chambers"}
+    with tempfile.TemporaryDirectory() as d:
+        out = Path(d) / "site"
+        (Path(d) / "assets").mkdir()
+        (Path(d) / "assets" / "core.js").write_text("x")
+        export(perfs, out, chambers, assets=Path(d) / "assets")
+        assert (out / "assets" / "core.js").read_text() == "x"
+        people, pid_of = build_people(perfs)
+        star_p = people["star player"][0]
+        h = star_p["h"]
+        assert [r[1] for r in h] == [4, 3, 2, 1, 5] and h[3] == [day(1), 1, "Swing", "T3", "F", 1, 1, 100, season_label(ly)], h
+        assert h[1][3] == "L" and h[1][5] == 4 and h[0][4] == "O" and h[0][5] is None and h[4][8] == season_label(ly - 1)
+        assert all(len(r) == 9 and r[4] in "POQSF" and r[6] in (0, 1) for r in h) and [r[0] for r in h] == sorted((r[0] for r in h), reverse=True)
+        labels = [t["label"] for t in star_p["top"]]
+        venues = [l.split(" @ ")[1] for l in labels]
+        assert len(venues) == len(set(venues)) == 3 and sum(v.startswith("Swing '") for v in venues) == 1, labels
+        assert len(people["final 1"][0]["h"]) == 2 and [r[1] for r in people["final 1"][0]["h"]] == [TOC_TID, TOC_TID]
+        assert len(best_per_event([p for p in toc if p["name"] == "Final 1"])) == 2
+
+        data = lambda n: json.loads((out / "data" / n).read_text())
+        rk = data("rankings.json")
+        assert rk["built_at"] == data("meta.json")["built_at"] and len(rk["overall"]) <= 250
+        assert [r["rating"] for r in rk["overall"]] == sorted((r["rating"] for r in rk["overall"]), reverse=True)
+        assert rk["overall"][0]["pid"] == "star player#0" and rk["overall"][0]["bids"] == 1 and rk["overall"][0]["n"] == 5
+        assert set(rk["overall"][0]) == {"pid", "name", "school", "rating", "tier", "n", "bids"}
+        cur, last = (season_label(y) for y in (CURRENT_SEASON, ly))
+        assert list(rk["seasons"]) == [cur, last] and rk["seasons"][cur] == []
+        board = rk["seasons"][last]
+        assert [r["points"] for r in board] == sorted((r["points"] for r in board), reverse=True)
+        row = next(r for r in board if r["pid"] == "star player#0")
+        assert set(row) == {"pid", "name", "school", "points", "best", "tier"} and row["best"].startswith("1st @ Swing")
+        want = sum(perf_points(p, 0) for p in best_per_event([p for p in star if p["season"] == ly]))
+        assert abs(row["points"] - want) < 0.06 and want > perf_points(star[0], 1), "season points carry no recency multiplier"
+        assert "weak kid#0" in {r["pid"] for r in board}
+
+        ch = data("chambers.json")
+        assert ch == {"strengths": [12.3, 40.1], "thresholds": CHAMBER_THRESHOLDS, "source": "2 real test chambers"}
+        sm = data("sample.json")
+        assert sm == {"title": f"{CURRENT_SEASON} Tournament of Champions final", "names": ["Final 1", "Final 2", "Final 3"], "tid": TOC_TID}, sm
+    if CHAMBERS_FILE.exists():
+        real = json.loads(CHAMBERS_FILE.read_text())
+        st = real["strengths"]
+        assert len(st) >= 100 and st == sorted(st) and real["source"].startswith(f"{len(st)} real ")
+        cuts = statistics.quantiles(st, n=100, method="inclusive")
+        assert all(abs(cuts[q - 1] - t) < 0.2 for q, t in zip((20, 45, 70, 90), CHAMBER_THRESHOLDS)), "perfs/chambers.json disagrees with CHAMBER_THRESHOLDS"
+
+
 def selfcheck() -> None:
-    for fn in (check_keys, check_extraction, check_scoring, check_cache, check_cluster, check_freeze_and_export):
+    for fn in (check_keys, check_extraction, check_scoring, check_cache, check_cluster, check_freeze_and_export, check_v2_export):
         fn()
     print("selfcheck OK")
 
@@ -964,7 +1129,7 @@ def main() -> None:
     elif args.calibrate:
         calibrate(load_perfs(seasons, PERFS_DIR))
     else:
-        meta = export(load_perfs(seasons, PERFS_DIR), Path(args.export))
+        meta = export(load_perfs(seasons, PERFS_DIR), Path(args.export), load_chambers())
         log(f"exported {meta['tournaments']} tournaments, {meta['people']} people, {meta['perfs']} perfs to {args.export}")
 
 

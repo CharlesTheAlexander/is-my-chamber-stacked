@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Is My Chamber Stacked? social card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@800&family=Public+Sans:wght@400..800&display=swap" rel="stylesheet">
+<style>
+/* 1200x630 Open Graph card. Screenshot the .card element to assets/og.png. */
+html, body { margin: 0; background: #ECEEF1; }
+.card {
+  width: 1200px; height: 630px; box-sizing: border-box; padding: 56px 64px;
+  display: grid; grid-template-columns: 1fr 520px; grid-template-rows: auto 1fr auto; column-gap: 48px;
+  background: #ECEEF1; color: #1B2A4A; font-family: "Public Sans", system-ui, sans-serif; overflow: hidden;
+}
+.mark { grid-column: 1; display: flex; align-items: center; gap: 14px; font-weight: 800; font-size: 28px; letter-spacing: -.02em; }
+.mark svg { width: 40px; height: 40px; }
+h1 { align-self: center; margin: 0; font-size: 76px; line-height: .98; font-weight: 800; letter-spacing: -.04em; }
+h1 span { display: block; color: #4E5A75; }
+.url { grid-column: 1; align-self: end; margin: 0; font-size: 20px; color: #4E5A75; white-space: nowrap; }
+.board {
+  grid-column: 2; grid-row: 1 / 4; align-self: center; background: #0E1A33; color: #E6EAF2;
+  border: 2px solid #B39256; border-radius: 6px; padding: 34px 34px 30px;
+}
+.top { display: flex; align-items: flex-start; gap: 28px; }
+.led { display: inline-grid; font-family: "Doto", monospace; font-weight: 800; font-size: 168px; line-height: .8; color: #F2F5FB; }
+.led::before, .led span { grid-area: 1 / 1; text-align: right; }
+.led::before { content: "88"; color: #182648; }
+.cap { margin: 14px 0 0; font-size: 17px; color: #9AA5BD; }
+.verdict { padding-top: 6px; }
+.verdict p { margin: 0; font-size: 21px; color: #9AA5BD; }
+.label { display: flex; align-items: center; gap: 12px; margin-top: 6px !important; font-size: 44px !important; font-weight: 800; letter-spacing: -.03em; color: #E6EAF2 !important; }
+.light { width: 18px; height: 18px; border-radius: 50%; flex: none; background: var(--c); box-shadow: 0 0 10px color-mix(in srgb, var(--c) 55%, transparent); }
+.r { --c: #E5484D; } .a { --c: #F0B429; } .g { --c: #2FB565; } .u { --c: #3A4660; box-shadow: none; }
+.lights { display: grid; grid-template-columns: repeat(15, 1fr); gap: 8px; margin-top: 30px; padding-top: 24px; border-top: 1px solid rgba(179, 146, 86, .4); }
+.lights .light { width: 20px; height: 20px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="mark">
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="1" y="1" width="30" height="30" rx="5" fill="#0E1A33" stroke="#B39256" stroke-width="2"/>
+      <circle cx="9.5" cy="9.5" r="3.4" fill="#E5484D"/><circle cx="16" cy="9.5" r="3.4" fill="#E5484D"/><circle cx="22.5" cy="9.5" r="3.4" fill="#F0B429"/>
+      <circle cx="9.5" cy="16" r="3.4" fill="#F0B429"/><circle cx="16" cy="16" r="3.4" fill="#2FB565"/><circle cx="22.5" cy="16" r="3.4" fill="#3A4660"/>
+      <circle cx="9.5" cy="22.5" r="3.4" fill="#2FB565"/><circle cx="16" cy="22.5" r="3.4" fill="#3A4660"/><circle cx="22.5" cy="22.5" r="3.4" fill="#2FB565"/>
+    </svg>
+    Is My Chamber Stacked?
+  </div>
+  <h1>Paste your Congress chamber. <span>See how stacked it is.</span></h1>
+  <p class="url">charlesthealexander.github.io/is-my-chamber-stacked</p>
+  <div class="board">
+    <div class="top">
+      <div>
+        <span class="led"><span>61</span></span>
+        <p class="cap">Chamber strength</p>
+      </div>
+      <div class="verdict">
+        <p>The yeas have it.</p>
+        <p class="label"><i class="light r"></i>Stacked</p>
+      </div>
+    </div>
+    <div class="lights" aria-hidden="true">
+      <i class="light r"></i><i class="light r"></i><i class="light r"></i><i class="light r"></i><i class="light a"></i>
+      <i class="light a"></i><i class="light a"></i><i class="light a"></i><i class="light g"></i><i class="light g"></i>
+      <i class="light g"></i><i class="light g"></i><i class="light g"></i><i class="light u"></i><i class="light u"></i>
+    </div>
+  </div>
+</div>
+</body>
+</html>
