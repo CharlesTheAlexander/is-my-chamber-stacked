@@ -47,6 +47,15 @@ jobs:
           pip install pytest playwright
           playwright install --with-deps chromium
       - run: python -m pytest -q
+      - name: Record the refresh (GitHub pauses schedules after 60 days without a commit)
+        if: github.event_name != 'push'
+        run: |
+          python -c "import json; m = json.load(open('site/data/meta.json')); print(m['built_at'], m['tournaments'], 'tournaments', m['people'], 'people')" > perfs/refreshed.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add perfs/refreshed.txt
+          git commit -m "Weekly Tabroom refresh"
+          git push
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
