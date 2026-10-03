@@ -2,7 +2,7 @@
 
 Paste your Congressional Debate chamber from Tabroom and see how strong the room is, how fried you are, and who to watch.
 
-**Live site: https://charlesthealexander.github.io/is-my-chamber-stacked/**
+**Live site: https://ismychamberstacked.github.io/**
 
 ![A chamber report: strength 53, "Stacked", with a rated roster](docs/screenshot.png)
 
@@ -14,7 +14,7 @@ Paste your Congressional Debate chamber from Tabroom and see how strong the room
 
 ## How the rating works
 
-Each result on Tabroom earns points by the tournament's level, how far the competitor got, and how big the field was. Recent results count more. A person's rating is their best results blended on a 0-100 curve, with floors for bids and TOC finals. A chamber's strength is 75% the average of the players who would break plus 25% the average of everyone else. The cutoffs for "Stacked" and the other labels come from 173 real 2025-26 national-circuit prelim chambers. The full formula, with worked examples, is on the [How it works](https://charlesthealexander.github.io/is-my-chamber-stacked/#/about) page.
+Each result on Tabroom earns points by the tournament's level, how far the competitor got, and how big the field was. Recent results count more. A person's rating is their best results blended on a 0-100 curve, with floors for bids and TOC finals. A chamber's strength is 75% the average of the players who would break plus 25% the average of everyone else. The cutoffs for "Stacked" and the other labels come from 173 real 2025-26 national-circuit prelim chambers. The full formula, with worked examples, is on the [How it works](https://ismychamberstacked.github.io/#/about) page.
 
 ## Data pipeline
 

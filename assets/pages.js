@@ -589,7 +589,7 @@ CS.route("about", async view => {
         E("li", {}, E("strong", {}, "Presiding officers look like everyone else. "), "Results don't say who presided."),
         E("li", {}, E("strong", {}, "It's a model. "), "The weights are hand-tuned to match how the circuit talks about results. Use it to prep, not to panic.")),
       E("p", {}, E("strong", {}, "Want your name off this site? "),
-        E("a", { href: "https://github.com/CharlesTheAlexander/is-my-chamber-stacked/issues/new?title=Remove%20my%20name" }, "Open an issue on GitHub"),
+        E("a", { href: "https://github.com/ismychamberstacked/ismychamberstacked.github.io/issues/new?title=Remove%20my%20name" }, "Open an issue on GitHub"),
         " with your name as Tabroom shows it. It disappears from chamber checks, profiles and rankings after the next Monday update.")),
 
     E("p", { class: "ab-fine" }, "Not affiliated with Tabroom.com, the National Speech & Debate Association, the National Catholic Forensic League or the Tournament of Champions. All results belong to the tournaments that published them.")));
