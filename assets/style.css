@@ -78,7 +78,7 @@ main:focus { outline: none; }
 .nav a:hover { color: var(--ink); }
 .nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--brass); }
 @media (max-width: 30rem) {
-  .nav { gap: 0 1rem; }
+  .nav { gap: 0 .75rem; font-size: .875rem; }
   .nav-x { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 
