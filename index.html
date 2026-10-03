@@ -426,7 +426,7 @@ const PARTICLES = new Set(["de", "del", "della", "di", "da", "dos", "das", "du",
 const NOISE = /^(ch\.?|chamber|location|judges?|entries|session\b.*|start time.*|rooms with.*|judges with gavels.*|.*\bround \d+$|chamber \d+|room\b.*)$/i;
 const ROOM = /^[A-Z]{1,5}[ -]?\d{1,4}[A-Z]?$/;
 const SCHOOL_CODE = /^[A-Z]{2,4}$/;
-const PO = /\s*(?:[-–—]\s*)?(?:\(\s*PO\s*\)|\bP\.?O\.?\b|presiding officer)\s*/gi;
+const PO = /\s*(?:[-–—]\s*)?(?:\(\s*[Pp][Oo]\s*\)|\bP\.?O\.?\b|[Pp]residing [Oo]fficer)\s*/g;
 const words = s => s.split(/\s+/).filter(Boolean);
 
 function splitRun(tokens, dict) {
